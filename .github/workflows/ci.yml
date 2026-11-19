@@ -1,0 +1,34 @@
+name: Foundation CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: API checks and Compose smoke
+    if: ${{ github.event.repository.visibility == 'public' || (github.event.repository.visibility == 'private' && vars.PRIVATE_CI_FREE_CONFIRMED == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version-file: .python-version
+      - run: "python -m pip install --only-binary=:all: uv==0.13.9"
+      - run: make setup check
+      - run: uv audit --project apps/api --locked
+      - run: make smoke
