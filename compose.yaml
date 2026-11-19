@@ -1,0 +1,16 @@
+services:
+  api:
+    build: ./apps/api
+    ports:
+      - target: 8000
+        published: "${API_PORT:-8000}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-I", "-c", "import json, sys, urllib.request; sys.exit(json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)) != {'status':'ok'})"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
