@@ -1,6 +1,6 @@
-## Purpose and linked issue
+## Purpose and acceptance criteria
 
-Closes #
+Describe the user need and the observable result.
 
 ## Behavior and decisions
 
