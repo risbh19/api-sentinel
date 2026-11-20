@@ -19,8 +19,17 @@ if __name__ == "__main__":
     web = "apps/web"
     check(api, "uv", "sync", "--locked")
     for args in [
-        ["ruff", "format", "--check", "src", "tests", "../../scripts"],
-        ["ruff", "check", "src", "tests", "../../scripts"],
+        [
+            "ruff",
+            "format",
+            "--check",
+            "src",
+            "tests",
+            "migrations",
+            "integration",
+            "../../scripts",
+        ],
+        ["ruff", "check", "src", "tests", "migrations", "integration", "../../scripts"],
         ["mypy"],
         ["pytest", "-q"],
     ]:

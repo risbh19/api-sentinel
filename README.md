@@ -44,6 +44,32 @@ docker compose up -d --wait
 python scripts/smoke.py
 ```
 
+## Apply the project records migration
+
+With the local Compose database running, apply the revision and check the
+result against the SQLAlchemy models. Existing setup volumes and .env files
+use the same commands as a new installation.
+
+```sh
+docker compose run --rm --build migrate
+docker compose run --rm migrate alembic current
+docker compose run --rm migrate alembic check
+docker compose run --rm --build record-tests
+```
+
+The current revision is `0001_project_records`. Reapplying it preserves
+existing rows. The test service creates a separate temporary database per
+test and exercises upgrade, downgrade and reapply there. Downgrading this
+revision to base drops both tables and their data. Use a disposable database
+for rollback tests. Back up retained records before an intentional rollback.
+
+These one-shot tools use the local database administrator. API readiness
+continues to use the restricted probe login. The internal records interface
+accepts an organization scope and supports project creation, lookup, paged
+listing, rename and deletion. The database enforces unique slugs within each
+organization and prevents deleting an organization that still owns projects.
+Publishing these operations over HTTP depends on sign-in and membership checks.
+
 ## Develop and test
 
 Install uv 0.13.9 and Node.js 24.22.3 with npm. uv reads apps/api/.python-version and
@@ -70,9 +96,9 @@ The readiness probe executes SELECT 1 using a dedicated PostgreSQL login.
 The API receives only the probe password. Local Compose credentials are
 visible to users with access to the Docker daemon. Keep .env private. The
 documented servers disable request access logs. Health responses carry
-service state only. This slice stores no application records and introduces
-no schema migrations. Authentication, inventory, event ingestion, detection
-and incident management are planned.
+service state only. The records schema stores organization and project names,
+project slugs, UUIDs and creation timestamps. Authentication, inventory, event
+ingestion, detection and incident management are planned.
 
 [Runtime decision](docs/decisions/0001-local-runtime.md) ·
 [Implementation status](docs/implementation-status.md) · [License](LICENSE)

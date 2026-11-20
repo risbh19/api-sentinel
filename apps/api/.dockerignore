@@ -3,4 +3,9 @@
 !uv.lock
 !src/
 !src/**
+!alembic.ini
+!migrations/
+!migrations/**
+!integration/
+!integration/**
 **/__pycache__/
