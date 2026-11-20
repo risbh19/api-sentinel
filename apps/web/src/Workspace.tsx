@@ -1,3 +1,4 @@
+import { Inventory } from "./Inventory";
 import { AuditActivity } from "./AuditActivity";
 import { api } from "./api";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -6,7 +7,8 @@ type Org = { id: string; name: string; role: string };
 type Account = { email: string; organizations: Org[]; csrf_token: string };
 type Project = { id: string; name: string; slug: string };
 
-function Projects({ org, onExpiry }: { org: Org; onExpiry: () => void }) {
+function Projects({ org, token, onExpiry }: { org: Org; token: string; onExpiry: () => void }) {
+  const [selected, setSelected] = useState("");
   const [items, setItems] = useState<Project[]>([]);
   const [cursor, setCursor] = useState("");
   const [more, setMore] = useState(false);
@@ -38,7 +40,9 @@ function Projects({ org, onExpiry }: { org: Org; onExpiry: () => void }) {
 
   return <section aria-labelledby="project-list">
     <div className="heading"><h2 id="project-list">Projects</h2><span>{org.role}</span></div>
-    {items.length > 0 && <ul>{items.map((p) => <li key={p.id}>{p.name} <code>{p.slug}</code></li>)}</ul>}
+    {items.length > 0 && <ul>{items.map((p) => <li key={p.id}>{p.name} <code>{p.slug}</code>{" "}
+      <button aria-label={"Inventory for " + p.name} aria-expanded={p.id === selected} onClick={() => setSelected(selected === p.id ? "" : p.id)}>Inventory</button>
+      {p.id === selected && <Inventory key={p.id} project={p.id} writable={["owner", "analyst", "developer"].includes(org.role)} token={token} onExpiry={onExpiry} />}</li>)}</ul>}
     {phase === "loading" && <p role="status">Loading projects…</p>}
     {phase === "done" && !items.length && <p>This organization has no projects yet.</p>}
     {phase === "error" && <><p role="alert">Unable to load these projects.</p>
@@ -116,7 +120,7 @@ export function Workspace() {
       {account && <><div className="account"><span>{account.email}</span><button disabled={busy} onClick={signOut}>Sign out</button></div>
         {org ? <><label>Organization<select value={org.id} onChange={(e) => setOrgId(e.target.value)}>
           {account.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-          <Projects key={org.id} org={org} onExpiry={expire} />
+          <Projects key={org.id} org={org} token={account.csrf_token} onExpiry={expire} />
           {(org.role === "owner" || org.role === "analyst") && <AuditActivity key={"audit-" + org.id} orgId={org.id} onExpiry={expire} />}</> : <p>Ask an organization owner to add your account.</p>}</>}
       {error && <p role="alert">{error}</p>}
     </main></>;

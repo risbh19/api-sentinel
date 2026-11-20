@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { stdin } from "node:process";
 import { chromium } from "playwright-core";
@@ -21,7 +22,13 @@ try {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByText("Smoke API", { exact: false }).waitFor();
+  await page.getByRole("button", { name: "Inventory for Smoke API" }).click();
+  await page.getByLabel(/OpenAPI file/).setInputFiles(fileURLToPath(new URL("../../../examples/petstore.yaml", import.meta.url)));
+  await page.getByRole("button", { name: "Import file" }).click();
+  await page.getByText("/pets/{petId}", { exact: true }).waitFor();
+  await page.getByText("localSession", { exact: true }).waitFor();
   await page.getByRole("button", { name: "View audit activity" }).click();
+  await page.getByText("Inventory imported", { exact: true }).waitFor();
   await page.getByText("Project created", { exact: true }).waitFor();
   await page.reload();
   await page.getByText(email, { exact: true }).waitFor();
@@ -30,7 +37,7 @@ try {
   await page.reload();
   await page.getByLabel("Password").waitFor();
   assert.equal(await page.getByText(email, { exact: true }).count(), 0);
-  console.log("Browser sign-in, project listing, session refresh and logout passed.");
+  console.log("Browser sign-in, local YAML upload, persisted project inventory, audit history and logout passed.");
 } finally {
   await browser.close();
 }
