@@ -154,6 +154,42 @@ Raw file contents, filenames, example bodies, server URLs and descriptions are
 discarded. Names and paths are visible to authorized project readers. Deleting
 a project removes its inventory revisions and retains its audit entries.
 
+## Connect a local emitter
+
+Open **Integrations** beside a project. Owners and developers can create,
+rotate and revoke its ingestion keys. Analysts can read masked metadata.
+Viewers have no key-management access. Enter an emitter name and select
+**Create key**. Save the one-time value in the emitter's secret store. Closing
+the panel or reloading the page clears the displayed value.
+
+To check the credential, use the project UUID shown in the panel's check URL.
+Run this command from the repository root and enter the key at the hidden prompt.
+
+```sh
+python scripts/check_emitter.py YOUR_PROJECT_UUID
+```
+
+The helper targets the loopback web proxy on port 8080. Pass `--port` for a
+custom web port. For unattended use, supply `SENTINEL_INGESTION_KEY` from your
+emitter's secret store. An accepted check returns HTTP 204 and updates the
+key's last-used timestamp. Event batch submission is the next implementation slice.
+
+| Action under /api/v1/projects/{project_id}/ingestion-keys | Authentication and result |
+| --- | --- |
+| POST with a JSON label | Session, Origin and CSRF token. Returns 201 with metadata and a one-time secret. |
+| GET | Session with read permission. Returns masked entries ordered by prefix, with `next_cursor` for the `after` parameter. |
+| POST /{key_id}/rotate | Management session, Origin and CSRF token. Revokes the old key and issues its replacement in one transaction. |
+| POST /{key_id}/revoke | Same management checks. Returns 204. Repeating a change to a revoked key returns 409. |
+| POST /check | Use `Authorization: Bearer <ingestion-key>`. An invalid, revoked or wrong-project credential returns 401. |
+
+The database stores a public prefix and SHA-256 digest of a token containing
+32 random secret bytes. Audit records identify the actor, project and key UUID.
+The complete token appears only in the issuance response, which carries
+`Cache-Control: no-store`. For an uninterrupted handover, create a second
+key, update the emitter, verify its connection, then revoke the old key. Atomic
+rotation invalidates the old credential immediately. If the issuance response
+is lost, use the masked list to identify and revoke the unclaimed key.
+
 ## Apply the database migrations
 
 With the local Compose database running, apply the revision and check the
@@ -167,9 +203,11 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0004_api_inventory`. Reapplying it preserves
+The current revision is `0005_ingestion_keys`. Reapplying it preserves
 existing rows. The test service creates a separate temporary database per
 test and exercises upgrade, downgrade and reapply there. A downgrade to
+`0004_api_inventory` removes credential storage and refuses to discard key audit
+facts that the older schema cannot represent. A downgrade to
 `0003_audit_activity` drops the inventory tables. If an import has been
 audited, PostgreSQL refuses this downgrade because the old audit schema cannot
 represent that action. The transaction rolls back and preserves the history.

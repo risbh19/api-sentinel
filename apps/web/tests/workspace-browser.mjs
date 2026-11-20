@@ -27,6 +27,22 @@ try {
   await page.getByRole("button", { name: "Import file" }).click();
   await page.getByText("/pets/{petId}", { exact: true }).waitFor();
   await page.getByText("localSession", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Integrations for Smoke API" }).click();
+  await page.getByLabel("Emitter name").fill("Browser emitter");
+  await page.getByRole("button", { name: "Create key" }).click();
+  await page.getByLabel("New ingestion key").waitFor();
+  await page.getByRole("button", { name: "Hide key" }).click();
+  await page.getByRole("button", { name: "Rotate", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm rotate" }).click();
+  await page.getByLabel("New ingestion key").waitFor();
+  await page.reload();
+  await page.getByRole("button", { name: "Integrations for Smoke API" }).click();
+  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  assert.equal(await page.getByLabel("New ingestion key").count(), 0);
+  await page.getByRole("button", { name: "Confirm revoke" }).click();
+  const browserKeys = page.getByRole("region", { name: "Project integrations" }).getByRole("listitem").filter({hasText: "Browser emitter"});
+  await browserKeys.getByText(/^Revoked ·/).nth(1).waitFor();
+  await page.getByRole("button", { name: "Rotate", exact: true }).waitFor({state:"detached"});
   await page.getByRole("button", { name: "View audit activity" }).click();
   await page.getByText("Inventory imported", { exact: true }).waitFor();
   await page.getByText("Project created", { exact: true }).waitFor();
@@ -37,7 +53,7 @@ try {
   await page.reload();
   await page.getByLabel("Password").waitFor();
   assert.equal(await page.getByText(email, { exact: true }).count(), 0);
-  console.log("Browser sign-in, local YAML upload, persisted project inventory, audit history and logout passed.");
+  console.log("Browser inventory, one-time ingestion key display, rotation, revocation and audit history passed.");
 } finally {
   await browser.close();
 }

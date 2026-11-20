@@ -7,11 +7,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from api_sentinel.audit.records import Action, record
-from api_sentinel.identity.models import Membership, User
-from api_sentinel.identity.routes import DB, Principal, authorize
+from api_sentinel.identity.models import Membership
+from api_sentinel.identity.routes import DB, Principal, project_scope
 from api_sentinel.identity.security import GRANTS, Permission, Role
 from api_sentinel.organizations.models import Project
 
@@ -47,26 +46,6 @@ class InventoryPage(BaseModel):
     revision: RevisionInfo | None
     entries: list[EndpointInfo]
     next_offset: int | None
-
-
-def scope(db: Session, user: User, project_id: UUID, permission: Permission) -> UUID:
-    org = db.scalar(
-        select(Project.organization_id)
-        .join(Membership, Membership.organization_id == Project.organization_id)
-        .where(Project.id == project_id, Membership.user_id == user.id)
-    )
-    if org is None:
-        raise HTTPException(404, "Project not found")
-    authorize(db, user, org, permission)
-    # Deletion and role changes use the same organization lock.
-    if (
-        db.scalar(
-            select(Project.id).where(Project.id == project_id, Project.organization_id == org)
-        )
-        is None
-    ):
-        raise HTTPException(404, "Project not found")
-    return org
 
 
 async def read_file(request: Request) -> bytes:
@@ -125,7 +104,7 @@ def import_file(
         )
     except InvalidDocument as exc:
         raise HTTPException(422, str(exc)) from None
-    org = scope(db, user, project_id, Permission.IMPORT)
+    org = project_scope(db, user, project_id, Permission.IMPORT)
     digest = hashlib.sha256(content).hexdigest()
     query = select(ImportRevision).where(ImportRevision.project_id == project_id)
     existing = db.scalar(query.where(ImportRevision.digest == digest))
@@ -170,7 +149,7 @@ def import_file(
 def history(
     project_id: UUID, user: Principal, db: DB, before: Revision | None = None, limit: Limit = 50
 ) -> list[RevisionInfo]:
-    scope(db, user, project_id, Permission.READ_INVENTORY)
+    project_scope(db, user, project_id, Permission.READ_INVENTORY)
     query = select(ImportRevision).where(ImportRevision.project_id == project_id)
     if before is not None:
         query = query.where(ImportRevision.revision < before)
@@ -192,7 +171,7 @@ def endpoints(
     offset: Annotated[int, Query(ge=0, le=500)] = 0,
     limit: Limit = 50,
 ) -> InventoryPage:
-    scope(db, user, project_id, Permission.READ_INVENTORY)
+    project_scope(db, user, project_id, Permission.READ_INVENTORY)
     revisions = select(ImportRevision).where(ImportRevision.project_id == project_id)
     if revision is not None:
         revisions = revisions.where(ImportRevision.revision == revision)

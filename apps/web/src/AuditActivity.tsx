@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 
 const labels: Record<string, string> = {
+  "key.created": "Ingestion key created",
+  "key.revoked": "Ingestion key revoked",
   "inventory.imported": "Inventory imported",
   "project.created": "Project created",
   "project.deleted": "Project deleted",
@@ -12,7 +14,7 @@ const labels: Record<string, string> = {
 
 type Entry = {
   id: string; occurred_at: string; action: string; actor_id: string | null;
-  project_id: string | null; subject_user_id: string | null;
+  key_id: string | null; project_id: string | null; subject_user_id: string | null;
   old_role: string | null; new_role: string | null; request_id: string | null;
 };
 type Page = { entries: Entry[]; next_cursor: string | null };
@@ -53,6 +55,7 @@ function History({ orgId, onExpiry }: { orgId: string; onExpiry: () => void }) {
       <time dateTime={entry.occurred_at}>{new Date(entry.occurred_at).toLocaleString()}</time>
       <dl>
         <dt>Actor</dt><dd>{entry.actor_id ?? "Local operator"}</dd>
+        {entry.key_id && <><dt>Key ID</dt><dd>{entry.key_id}</dd></>}
         {entry.project_id && <><dt>Project</dt><dd>{entry.project_id}</dd></>}
         {entry.subject_user_id && <><dt>Member</dt><dd>{entry.subject_user_id}</dd></>}
         {entry.old_role && <><dt>Previous role</dt><dd>{entry.old_role}</dd></>}

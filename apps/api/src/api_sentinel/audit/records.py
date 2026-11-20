@@ -17,6 +17,8 @@ class Action(StrEnum):
     LOGIN_FAILED = "session.login_failed"
     SESSION_REPLACED = "session.replaced"
     LOGOUT = "session.logout"
+    KEY_CREATED = "key.created"
+    KEY_REVOKED = "key.revoked"
     INVENTORY_IMPORTED = "inventory.imported"
     PROJECT_CREATED = "project.created"
     PROJECT_DELETED = "project.deleted"
@@ -54,6 +56,7 @@ class AuditEntry(Base):
     organization_id: Mapped[UUID | None]
     project_id: Mapped[UUID | None]
     actor_id: Mapped[UUID | None]
+    key_id: Mapped[UUID | None]
     subject_user_id: Mapped[UUID | None]
     old_role: Mapped[Role | None] = mapped_column(
         sa.Enum(
@@ -84,6 +87,7 @@ def record(
     actor_id: UUID | None = None,
     organization_id: UUID | None = None,
     project_id: UUID | None = None,
+    key_id: UUID | None = None,
     subject_user_id: UUID | None = None,
     old_role: Role | None = None,
     new_role: Role | None = None,
@@ -95,6 +99,7 @@ def record(
             actor_id=actor_id,
             organization_id=organization_id,
             project_id=project_id,
+            key_id=key_id,
             subject_user_id=subject_user_id,
             old_role=old_role,
             new_role=new_role,

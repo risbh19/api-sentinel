@@ -9,17 +9,13 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import (
     HTTPCookieProcessor,
-    HTTPRedirectHandler,
     ProxyHandler,
     Request,
     build_opener,
 )
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-
-class RejectRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+from check_emitter import RejectRedirect, check
 
 
 def main() -> None:
@@ -90,6 +86,30 @@ def main() -> None:
     audit = request(f"/organizations/{org['id']}/audit?project_id={project['id']}")["entries"]
     assert len(audit) == 1 and audit[0]["actor_id"] == account["id"]
     assert audit[0]["action"] == "project.created" and audit[0]["request_id"]
+    keys = f"/projects/{project['id']}/ingestion-keys"
+    made = request(
+        keys,
+        method="POST",
+        payload={"label": "Proxy smoke"},
+        csrf=account["csrf_token"],
+        expected=201,
+    )
+    assert check(UUID(project["id"]), made["secret"]) == 204
+    rotated = request(
+        keys + "/" + made["key"]["id"] + "/rotate",
+        method="POST",
+        csrf=account["csrf_token"],
+        expected=201,
+    )
+    assert check(UUID(project["id"]), made["secret"]) == 401
+    assert check(UUID(project["id"]), rotated["secret"]) == 204
+    request(
+        keys + "/" + rotated["key"]["id"] + "/revoke",
+        method="POST",
+        csrf=account["csrf_token"],
+        expected=204,
+    )
+    assert check(UUID(project["id"]), rotated["secret"]) == 401
     assert request("/auth/activity")["entries"][0]["action"] == "session.login"
     request("/auth/logout", method="POST", csrf=account["csrf_token"], expected=204)
     request("/auth/me", expected=401)
@@ -101,7 +121,9 @@ def main() -> None:
             text=True,
             check=True,
         )
-    print("Sign-in, project creation, listing and logout passed through the web proxy.")
+    print(
+        "Project access and emitter creation, rotation and revocation passed through the web proxy."
+    )
 
 
 if __name__ == "__main__":

@@ -13,5 +13,8 @@ storage.
 
 [Audit activity](https://github.com/risbh19/api-sentinel/pull/7) merged at
 `c09615e` with append-only history and a scoped workspace reader.
-The api-inventory branch imports local OpenAPI contracts into versioned
-project inventories. The next planned slice adds scoped ingestion keys.
+
+[API inventory](https://github.com/risbh19/api-sentinel/pull/8) merged at
+`846ad4e` with bounded contract imports and versioned project inventories.
+The integration-keys branch adds one-time credentials, rotation, revocation
+and a local emitter connection check. Event batch ingestion follows.
