@@ -87,6 +87,10 @@ def main() -> None:
         payload={"name": "Smoke API", "slug": "smoke"},
     )
     assert request(collection)[0]["id"] == project["id"]
+    audit = request(f"/organizations/{org['id']}/audit?project_id={project['id']}")["entries"]
+    assert len(audit) == 1 and audit[0]["actor_id"] == account["id"]
+    assert audit[0]["action"] == "project.created" and audit[0]["request_id"]
+    assert request("/auth/activity")["entries"][0]["action"] == "session.login"
     request("/auth/logout", method="POST", csrf=account["csrf_token"], expected=204)
     request("/auth/me", expected=401)
     if args.browser:

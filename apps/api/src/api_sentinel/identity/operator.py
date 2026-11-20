@@ -13,6 +13,7 @@ from psycopg import sql
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from api_sentinel.audit.records import Action, record
 from api_sentinel.database import open_engine, transaction
 from api_sentinel.organizations.models import Organization
 from api_sentinel.organizations.records import create_organization
@@ -40,6 +41,11 @@ def prepare() -> None:
             )
         )
         conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app")
+        conn.execute("GRANT SELECT ON audit_entries TO sentinel_app")
+        conn.execute(
+            "GRANT INSERT (action, organization_id, project_id, actor_id, subject_user_id, "
+            "old_role, new_role, request_id) ON audit_entries TO sentinel_app"
+        )
         conn.execute("GRANT SELECT ON users, organizations TO sentinel_app")
         conn.execute("GRANT UPDATE (name) ON organizations TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT, DELETE ON web_sessions TO sentinel_app")
@@ -64,6 +70,7 @@ def provision(
             user = User(email=email, password_hash=encoded)
             db.add(user)
             db.flush()
+            record(db, Action.ACCOUNT_CREATED, subject_user_id=user.id)
             if organization is not None:
                 org = create_organization(db, organization)
                 organization_id = org.id
@@ -83,6 +90,13 @@ def provision(
                 if existing is not None:
                     raise ValueError("This organization already has members")
             if organization_id is not None:
+                record(
+                    db,
+                    Action.MEMBER_ADDED,
+                    organization_id=organization_id,
+                    subject_user_id=user.id,
+                    new_role=Role.OWNER,
+                )
                 db.add(
                     Membership(organization_id=organization_id, user_id=user.id, role=Role.OWNER)
                 )

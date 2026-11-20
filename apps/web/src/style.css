@@ -32,3 +32,8 @@ label { display: grid; gap: .35rem; margin-bottom: 1rem; }
 input, select { font: inherit; background: #11191d; color: inherit; border: 1px solid #708386; border-radius: .35rem; padding: .55rem .75rem; max-width: 100%; }
 input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #a3e4ba; outline-offset: 2px; }
 .account { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+
+.audit-entries { padding-inline-start: 1.5rem; }
+.audit-entries li { margin-block: 1rem; }
+.audit-entries dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .3rem .8rem; }
+.audit-entries dd { margin: 0; overflow-wrap: anywhere; }

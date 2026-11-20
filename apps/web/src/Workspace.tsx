@@ -1,12 +1,10 @@
+import { AuditActivity } from "./AuditActivity";
+import { api } from "./api";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Org = { id: string; name: string; role: string };
 type Account = { email: string; organizations: Org[]; csrf_token: string };
 type Project = { id: string; name: string; slug: string };
-
-async function api(path: string, options?: RequestInit) {
-  return fetch("/api/v1" + path, { cache: "no-store", credentials: "same-origin", ...options });
-}
 
 function Projects({ org, onExpiry }: { org: Org; onExpiry: () => void }) {
   const [items, setItems] = useState<Project[]>([]);
@@ -118,7 +116,8 @@ export function Workspace() {
       {account && <><div className="account"><span>{account.email}</span><button disabled={busy} onClick={signOut}>Sign out</button></div>
         {org ? <><label>Organization<select value={org.id} onChange={(e) => setOrgId(e.target.value)}>
           {account.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-          <Projects key={org.id} org={org} onExpiry={expire} /></> : <p>Ask an organization owner to add your account.</p>}</>}
+          <Projects key={org.id} org={org} onExpiry={expire} />
+          {(org.role === "owner" || org.role === "analyst") && <AuditActivity key={"audit-" + org.id} orgId={org.id} onExpiry={expire} />}</> : <p>Ask an organization owner to add your account.</p>}</>}
       {error && <p role="alert">{error}</p>}
     </main></>;
 }

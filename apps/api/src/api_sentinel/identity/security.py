@@ -29,6 +29,7 @@ class Role(StrEnum):
 
 class Permission(StrEnum):
     READ = "read"
+    READ_AUDIT = "read_audit"
     EDIT_PROJECT = "edit_project"
     DELETE_PROJECT = "delete_project"
     MANAGE_MEMBERS = "manage_members"
@@ -37,7 +38,7 @@ class Permission(StrEnum):
 GRANTS = {
     Role.OWNER: frozenset(Permission),
     Role.DEVELOPER: frozenset({Permission.READ, Permission.EDIT_PROJECT}),
-    Role.ANALYST: frozenset({Permission.READ}),
+    Role.ANALYST: frozenset({Permission.READ, Permission.READ_AUDIT}),
     Role.VIEWER: frozenset({Permission.READ}),
 }
 
