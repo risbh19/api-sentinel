@@ -1,0 +1,35 @@
+name: Project records
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-records-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  records:
+    name: PostgreSQL migrations and record tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Create local test credentials
+        run: python3 scripts/init_env.py
+
+      - name: Apply and verify migrations
+        run: |
+          docker compose run --rm --build migrate
+          docker compose run --rm migrate alembic current --check-heads
+          docker compose run --rm migrate alembic check
+
+      - name: Run PostgreSQL integration tests
+        run: docker compose run --rm --build record-tests

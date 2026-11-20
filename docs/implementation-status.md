@@ -1,8 +1,10 @@
 # Implementation status
 
-The project-setup branch adds the service-health page, PostgreSQL probe,
-local Compose stack and development checks. The worker is an idle scaffold.
-See [the setup pull request](https://github.com/risbh19/api-sentinel/pull/4) for validation and merge state.
+[Application setup](https://github.com/risbh19/api-sentinel/pull/4) merged at
+`68b63c5`. Windows Docker testing confirmed startup and database outage recovery.
+The worker runs as an idle scaffold.
 
-The next slice introduces SQLAlchemy models and Alembic migrations for
-organizations and projects, including rollback and reapply tests.
+The project-records branch adds the initial Alembic migration, SQLAlchemy
+records and organization-scoped project operations. Local Compose migration
+and integration test commands are in the README. The storage operations
+are internal until the next slice adds sign-in, membership and roles.

@@ -3,8 +3,10 @@ name = "api-sentinel"
 version = "0.0.0"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "alembic==1.20.1",
     "fastapi==0.165.0",
     "psycopg[binary]==3.3.9",
+    "sqlalchemy==2.1.9",
     "uvicorn==0.54.0",
 ]
 
@@ -20,5 +22,5 @@ line-length = 99
 
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "integration", "migrations"]
 mypy_path = "src"
