@@ -33,3 +33,10 @@ jobs:
 
       - name: Run PostgreSQL integration tests
         run: docker compose run --rm --build record-tests
+
+      - name: Check sign-in through the web proxy
+        run: |
+          docker compose up --build --wait
+          python3 scripts/smoke.py
+          npm ci --prefix apps/web --no-audit --no-fund
+          CHROME_BIN="$(command -v google-chrome)" python3 scripts/smoke_access.py --browser

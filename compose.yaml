@@ -17,6 +17,17 @@ x-db-tool: &db-tool
     db: {condition: service_healthy}
 
 services:
+  access-init:
+    <<: *app
+    environment:
+      PGHOST: db
+      PGDATABASE: sentinel
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run scripts/init_env.py}
+      SENTINEL_APP_PASSWORD: ${SENTINEL_APP_PASSWORD:?Run scripts/init_env.py}
+    depends_on:
+      db: {condition: service_healthy}
+    command: ["python", "-m", "api_sentinel.identity.operator", "prepare"]
   migrate:
     <<: *db-tool
     command: ["alembic", "upgrade", "head"]
@@ -44,11 +55,13 @@ services:
     environment:
       PGHOST: db
       PGDATABASE: sentinel
+      SENTINEL_APP_PASSWORD: ${SENTINEL_APP_PASSWORD:?Run scripts/init_env.py}
+      SENTINEL_WEB_ORIGIN: ${SENTINEL_WEB_ORIGIN:-http://127.0.0.1:${WEB_PORT:-8080}}
       PGUSER: sentinel_probe
       PGPASSWORD: ${SENTINEL_PROBE_PASSWORD:?Generate .env with scripts/init_env.py}
     ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
     depends_on:
-      db: {condition: service_healthy}
+      access-init: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/ready', timeout=4).close()"]
       interval: 5s

@@ -4,7 +4,8 @@
 `68b63c5`. Windows Docker testing confirmed startup and database outage recovery.
 The worker runs as an idle scaffold.
 
-The project-records branch adds the initial Alembic migration, SQLAlchemy
-records and organization-scoped project operations. Local Compose migration
-and integration test commands are in the README. The storage operations
-are internal until the next slice adds sign-in, membership and roles.
+[Project records](https://github.com/risbh19/api-sentinel/pull/5) merged at
+`efae961` with the initial Alembic migration and organization-scoped project
+storage. The project-access branch adds local sign-in, server-side sessions,
+organization roles, protected project endpoints and the web workspace.
+The next planned slice records security-relevant audit activity.
