@@ -70,6 +70,35 @@ class SecurityEvent(Base):
             name="ck_event_failure_status",
         ),
         sa.Index("ix_events_project_time", "project_id", "occurred_at"),
+        sa.Index(
+            "ix_event_auth_window",
+            "project_id",
+            "source_id",
+            "actor_hash",
+            "occurred_at",
+            "external_event_id",
+            postgresql_where=sa.text("event_type = 'authentication_failure'"),
+        ),
+        sa.Index(
+            "ix_event_denial_window",
+            "project_id",
+            "source_id",
+            "actor_hash",
+            "method",
+            "route_template",
+            "occurred_at",
+            "external_event_id",
+            postgresql_where=sa.text("event_type = 'authorization_denial'"),
+        ),
+        sa.Index(
+            "ix_event_client_window",
+            "project_id",
+            "source_id",
+            "client_hash",
+            "occurred_at",
+            "external_event_id",
+            postgresql_where=sa.text("client_hash IS NOT NULL"),
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=sa.text("gen_random_uuid()"))
     project_id: Mapped[UUID] = mapped_column()

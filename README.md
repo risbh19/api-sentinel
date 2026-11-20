@@ -209,8 +209,8 @@ Existing installations must rerun `python scripts/init_env.py` before rebuilding
 This adds a missing event pseudonymization key while preserving existing secrets.
 See [event contracts and privacy](docs/event-ingestion.md) for the batch schema,
 atomic error behavior, quotas, pagination, key rotation and retention boundaries.
-Detection jobs, rules, alerts and incidents follow in later slices; stored events
-alone do not indicate an exploited vulnerability.
+The worker evaluates three [detection rules](docs/detection-rules.md) and records
+the observations supporting each match.
 
 ## Apply the database migrations
 
@@ -225,7 +225,10 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0007_event_jobs`. It queues previously stored events.
+The current revision is `0008_detection_rules`. When upgrading from 0007, stop
+the existing worker before migration, then rebuild and start the Compose stack.
+Completed jobs are queued again for evaluation. Downgrading to 0007 removes
+findings and keeps source events and jobs.
 Downgrading to `0006_security_events` discards job history and keeps events.
 Reapplying the head revision without a downgrade preserves
 existing rows. The test service creates a separate temporary database per
@@ -291,7 +294,8 @@ service state only. The records schema stores organization and project names,
 project slugs, UUIDs and creation timestamps. The identity schema also stores account email, password hash, active status, roles,
 session digests and expiry, and bounded login counters. No public registration or
 password recovery is available in this slice. Security event storage and queries
-are available. Detection processing and incident management remain planned.
+are available. The worker records rule findings. Alert correlation and incident
+management are planned.
 
 [Runtime decision](docs/decisions/0001-local-runtime.md) ·
 [Implementation status](docs/implementation-status.md) · [License](LICENSE)

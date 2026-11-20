@@ -6,6 +6,7 @@ import os
 import secrets
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -21,12 +22,55 @@ from uuid import UUID, uuid4
 from check_emitter import RejectRedirect, check
 
 
+def check_detection(project: UUID, emitter_env: dict[str, str]) -> None:
+    # The emitter already submitted and replayed one observation for this fresh project.
+    for _ in range(7):
+        subprocess.run([sys.executable, "scripts/emit_event.py"], env=emitter_env, check=True)
+    query = f"""
+        SELECT f.rule_key, f.version, f.threshold, f.window_seconds, cardinality(f.evidence)
+        FROM rule_findings f JOIN security_events e ON e.id=f.event_id
+        WHERE e.project_id='{project}' AND e.source_id='synthetic-local-demo'
+    """
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "db",
+                "psql",
+                "-XAt",
+                "-U",
+                "postgres",
+                "-d",
+                "sentinel",
+                "-c",
+                query,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if result.stdout.strip() == "authentication_failures|1|8|300|8":
+            print(
+                "Packaged worker recorded the expected versioned finding with eight observations."
+            )
+            return
+        time.sleep(0.5)
+    raise RuntimeError("The expected authentication finding did not appear within 30 seconds")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--browser",
         action="store_true",
         help="Also verify the workspace using local Chrome",
+    )
+    parser.add_argument(
+        "--rules", action="store_true", help="Check a finding from the running worker"
     )
     args = parser.parse_args()
     origin = "http://127.0.0.1:8080"
@@ -118,6 +162,8 @@ def main() -> None:
     detail = request(events_url + "/" + events[0]["id"])
     assert detail["external_event_id"] == event_id and detail["actor_hash"]
     assert "actor_token" not in detail
+    if args.rules:
+        check_detection(UUID(project["id"]), emitter_env)
     rotated = request(
         keys + "/" + made["key"]["id"] + "/rotate",
         method="POST",

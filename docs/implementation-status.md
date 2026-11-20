@@ -24,5 +24,8 @@ storage.
 `912296a` with atomic project-scoped batches, pseudonymization, replay
 deduplication and the event explorer.
 
-The event-processing branch adds a durable job per event, worker recovery
-and aggregate queue status. The next slice evaluates detection rules.
+[Event processing](https://github.com/risbh19/api-sentinel/pull/11) merged at
+`db84972` with a durable job per event, worker recovery and aggregate queue status.
+
+The detection-rules branch evaluates three rolling thresholds and retains their
+versioned evidence. Alert correlation is the next slice.
