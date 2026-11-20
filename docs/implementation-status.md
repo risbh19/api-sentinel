@@ -16,5 +16,10 @@ storage.
 
 [API inventory](https://github.com/risbh19/api-sentinel/pull/8) merged at
 `846ad4e` with bounded contract imports and versioned project inventories.
-The integration-keys branch adds one-time credentials, rotation, revocation
-and a local emitter connection check. Event batch ingestion follows.
+
+[Integration keys](https://github.com/risbh19/api-sentinel/pull/9) merged at
+`8c7a207` with one-time credentials, rotation, revocation and a local emitter check.
+
+The event-ingestion branch adds atomic, project-key authenticated event batches,
+pseudonymization, replay deduplication and a scoped event explorer. It is pending
+PR review and merge. Durable detection work and worker recovery are the next slice.

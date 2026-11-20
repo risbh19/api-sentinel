@@ -32,6 +32,8 @@ class Permission(StrEnum):
     IMPORT = "import_inventory"
     READ_INVENTORY = "read_inventory"
     READ_KEYS = "read_keys"
+    READ_EVENTS = "read_events"
+    READ_EVENT_DETAILS = "read_event_details"
     MANAGE_KEYS = "manage_keys"
     READ_AUDIT = "read_audit"
     EDIT_PROJECT = "edit_project"
@@ -46,6 +48,8 @@ GRANTS = {
             Permission.READ,
             Permission.MANAGE_KEYS,
             Permission.READ_KEYS,
+            Permission.READ_EVENTS,
+            Permission.READ_EVENT_DETAILS,
             Permission.EDIT_PROJECT,
             Permission.READ_INVENTORY,
             Permission.IMPORT,
@@ -55,12 +59,14 @@ GRANTS = {
         {
             Permission.READ,
             Permission.READ_KEYS,
+            Permission.READ_EVENTS,
+            Permission.READ_EVENT_DETAILS,
             Permission.READ_AUDIT,
             Permission.READ_INVENTORY,
             Permission.IMPORT,
         }
     ),
-    Role.VIEWER: frozenset({Permission.READ, Permission.READ_INVENTORY}),
+    Role.VIEWER: frozenset({Permission.READ, Permission.READ_INVENTORY, Permission.READ_EVENTS}),
 }
 
 

@@ -8,12 +8,14 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import Engine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.exc import TimeoutError as PoolTimeout
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 
 from api_sentinel.audit.routes import router as audit_router
@@ -22,6 +24,7 @@ from api_sentinel.health import database_ready
 from api_sentinel.identity.body_limit import AccessBodyLimit
 from api_sentinel.identity.routes import router
 from api_sentinel.identity.security import web_origin
+from api_sentinel.ingestion.event_routes import router as event_router
 from api_sentinel.ingestion.routes import router as key_router
 from api_sentinel.inventory.routes import router as inventory_router
 
@@ -51,16 +54,81 @@ def create_app(
     app.include_router(audit_router)
     app.include_router(inventory_router)
     app.include_router(key_router)
+    app.include_router(event_router)
     app.add_middleware(AccessBodyLimit)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_input(request: Request, exc: RequestValidationError) -> JSONResponse:
         # FastAPI's default payload may echo rejected passwords.
+        if request.url.path == "/api/v1/ingest/events":
+            # Never echo rejected values, attacker-controlled names or parser errors.
+            fields = {
+                "events",
+                "source_id",
+                "event_id",
+                "occurred_at",
+                "event_type",
+                "method",
+                "route_template",
+                "status_code",
+                "actor_token",
+                "client_token",
+            }
+            details = []
+            for error in exc.errors()[:20]:
+                path = [
+                    str(p)
+                    for p in error["loc"]
+                    if (isinstance(p, str) and p in fields) or (type(p) is int and 0 <= p < 100)
+                ]
+                details.append({"field": ".".join(path) or "batch", "message": "Invalid field"})
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid event batch; no records accepted",
+                        "request_id": request.state.request_id,
+                        "details": details,
+                    }
+                },
+                status_code=422,
+            )
         return JSONResponse({"detail": "Invalid request fields"}, status_code=422)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        if request.url.path == "/api/v1/ingest/events":
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": {
+                            401: "INVALID_CREDENTIAL",
+                            413: "PAYLOAD_TOO_LARGE",
+                            429: "RATE_LIMITED",
+                        }.get(exc.status_code, "INGESTION_ERROR"),
+                        "message": exc.detail,
+                        "request_id": request.state.request_id,
+                    }
+                },
+                status_code=exc.status_code,
+                headers=exc.headers,
+            )
+        return await http_exception_handler(request, exc)
 
     @app.exception_handler(DBAPIError)
     @app.exception_handler(PoolTimeout)
     async def storage_unavailable(request: Request, exc: DBAPIError | PoolTimeout) -> JSONResponse:
+        if request.url.path == "/api/v1/ingest/events":
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": "STORAGE_UNAVAILABLE",
+                        "message": "Database operation unavailable",
+                        "request_id": request.state.request_id,
+                    }
+                },
+                status_code=503,
+            )
         return JSONResponse({"detail": "Database operation unavailable"}, status_code=503)
 
     @app.middleware("http")

@@ -57,6 +57,7 @@ services:
       PGDATABASE: sentinel
       SENTINEL_APP_PASSWORD: ${SENTINEL_APP_PASSWORD:?Run scripts/init_env.py}
       SENTINEL_WEB_ORIGIN: ${SENTINEL_WEB_ORIGIN:-http://127.0.0.1:${WEB_PORT:-8080}}
+      SENTINEL_EVENT_HMAC_KEY: ${SENTINEL_EVENT_HMAC_KEY:?Run scripts/init_env.py}
       PGUSER: sentinel_probe
       PGPASSWORD: ${SENTINEL_PROBE_PASSWORD:?Generate .env with scripts/init_env.py}
     ports: ["127.0.0.1:${API_PORT:-8000}:8000"]

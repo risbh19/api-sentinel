@@ -2,8 +2,11 @@
 
 import argparse
 import json
+import os
 import secrets
 import subprocess
+import sys
+from datetime import UTC, datetime, timedelta
 from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.error import HTTPError
@@ -21,7 +24,9 @@ from check_emitter import RejectRedirect, check
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--browser", action="store_true", help="Also verify the workspace using local Chrome"
+        "--browser",
+        action="store_true",
+        help="Also verify the workspace using local Chrome",
     )
     args = parser.parse_args()
     origin = "http://127.0.0.1:8080"
@@ -95,6 +100,24 @@ def main() -> None:
         expected=201,
     )
     assert check(UUID(project["id"]), made["secret"]) == 204
+    emitter_env = {**os.environ, "SENTINEL_INGESTION_KEY": made["secret"]}
+    event_id = "synthetic-proxy-" + uuid4().hex
+    command = [sys.executable, "scripts/emit_event.py", "--event-id", event_id]
+    for accepted, duplicate in ((1, 0), (0, 1)):
+        emitted = subprocess.run(
+            command, env=emitter_env, capture_output=True, text=True, check=True
+        )
+        assert f"{accepted} accepted, {duplicate} duplicate, 0 rejected" in emitted.stdout
+    from urllib.parse import urlencode
+
+    now = datetime.now(UTC)
+    window = urlencode({"since": (now - timedelta(hours=1)).isoformat(), "until": now.isoformat()})
+    events_url = f"/projects/{project['id']}/events"
+    events = request(events_url + "?" + window)["entries"]
+    assert len(events) == 1 and events[0]["route_template"] == "/api/login"
+    detail = request(events_url + "/" + events[0]["id"])
+    assert detail["external_event_id"] == event_id and detail["actor_hash"]
+    assert "actor_token" not in detail
     rotated = request(
         keys + "/" + made["key"]["id"] + "/rotate",
         method="POST",

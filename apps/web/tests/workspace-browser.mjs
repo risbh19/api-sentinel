@@ -31,7 +31,23 @@ try {
   await page.getByLabel("Emitter name").fill("Browser emitter");
   await page.getByRole("button", { name: "Create key" }).click();
   await page.getByLabel("New ingestion key").waitFor();
+  const ingestionKey = await page.getByLabel("New ingestion key").inputValue();
+  const payload = { source_id: "synthetic-browser", events: [{ event_id: "browser-event", occurred_at: new Date().toISOString(), event_type: "authentication_failure", method: "POST", route_template: "/api/login", status_code: 401, actor_token: "synthetic-browser-actor" }] };
+  const submit = () => page.request.post(origin + "/api/v1/ingest/events", { headers: { Authorization: "Bearer " + ingestionKey }, data: payload });
+  const accepted = await submit();
+  assert.equal(accepted.status(), 200);
+  assert.equal((await accepted.json()).accepted, 1);
+  assert.equal((await (await submit()).json()).duplicate, 1);
   await page.getByRole("button", { name: "Hide key" }).click();
+  await page.getByRole("button", { name: "Events for Smoke API" }).click();
+  await page.getByLabel("Event source").fill("synthetic-browser");
+  await page.getByRole("button", { name: "Apply event filters" }).click();
+  await page.getByRole("region", { name: "Security events", exact: true }).getByText("/api/login", { exact: true }).waitFor();
+  await page.getByRole("button", { name: /^View event / }).click();
+  await page.getByText("browser-event", { exact: true }).waitFor();
+  assert.equal(await page.getByText("synthetic-browser-actor", { exact: true }).count(), 0);
+  await page.getByText("Actor pseudonym", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Integrations for Smoke API" }).click();
   await page.getByRole("button", { name: "Rotate", exact: true }).click();
   await page.getByRole("button", { name: "Confirm rotate" }).click();
   await page.getByLabel("New ingestion key").waitFor();
@@ -53,7 +69,7 @@ try {
   await page.reload();
   await page.getByLabel("Password").waitFor();
   assert.equal(await page.getByText(email, { exact: true }).count(), 0);
-  console.log("Browser inventory, one-time ingestion key display, rotation, revocation and audit history passed.");
+  console.log("Browser inventory, event ingestion and replay, pseudonym details, key lifecycle and audit history passed.");
 } finally {
   await browser.close();
 }

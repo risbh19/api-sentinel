@@ -17,21 +17,27 @@ def main() -> None:
         ) from None
     os.close(fd)
     try:
+        generated = {
+            "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
+            "SENTINEL_PROBE_PASSWORD": secrets.token_urlsafe(32),
+            "SENTINEL_APP_PASSWORD": secrets.token_urlsafe(32),
+            "SENTINEL_EVENT_HMAC_KEY": secrets.token_hex(32),
+        }
         if path.exists():
             current = path.read_text(encoding="utf-8")
-            if any(
-                line.strip().removeprefix("export ").startswith("SENTINEL_APP_PASSWORD=")
+            present = {
+                line.strip().removeprefix("export ").split("=", 1)[0]
                 for line in current.splitlines()
-            ):
-                print("Local configuration already contains the application credential.")
-                return
-            with path.open("a", encoding="utf-8") as stream:
-                stream.write("\nSENTINEL_APP_PASSWORD=" + secrets.token_urlsafe(32) + "\n")
-            print("Added the application credential to the existing .env.")
+            }
+            missing = [key for key in generated if key not in present]
+            if missing:
+                with path.open("a", encoding="utf-8") as stream:
+                    stream.write("\n" + "".join(f"{key}={generated[key]}\n" for key in missing))
+            print("Local configuration checked; existing secrets preserved.")
             return
         template = (root / ".env.example").read_text(encoding="utf-8")
-        for key in ("POSTGRES_PASSWORD", "SENTINEL_PROBE_PASSWORD", "SENTINEL_APP_PASSWORD"):
-            template = template.replace(f"{key}=\n", f"{key}={secrets.token_urlsafe(32)}\n")
+        for key, value in generated.items():
+            template = template.replace(f"{key}=\n", f"{key}={value}\n")
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(template)

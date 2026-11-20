@@ -1,8 +1,10 @@
 import re
 
 from fastapi import HTTPException
+from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from api_sentinel.ingestion.events import MAX_BATCH_BYTES
 from api_sentinel.inventory.parser import MAX_BYTES
 
 
@@ -16,11 +18,33 @@ class AccessBodyLimit:
         if scope["type"] != "http" or not scope["path"].startswith("/api/v1/"):
             await self.app(scope, receive, send)
             return
+        if scope["path"] == "/api/v1/ingest/events" and scope["method"] == "POST":
+            headers = dict(scope["headers"])
+            if (
+                headers.get(b"content-encoding")
+                or headers.get(b"content-type", b"").split(b";")[0].strip().lower()
+                != b"application/json"
+            ):
+                await JSONResponse(
+                    {
+                        "error": {
+                            "code": "UNSUPPORTED_MEDIA_TYPE",
+                            "message": "Send uncompressed application/json",
+                            "request_id": scope.get("state", {}).get("request_id"),
+                        }
+                    },
+                    status_code=415,
+                )(scope, receive, send)
+                return
         limit = (
-            MAX_BYTES
-            if scope["method"] == "POST"
-            and re.fullmatch(r"/api/v1/projects/[0-9a-fA-F-]{32,36}/imports", scope["path"])
-            else 16384
+            MAX_BATCH_BYTES
+            if scope["path"] == "/api/v1/ingest/events"
+            else (
+                MAX_BYTES
+                if scope["method"] == "POST"
+                and re.fullmatch(r"/api/v1/projects/[0-9a-fA-F-]{32,36}/imports", scope["path"])
+                else 16384
+            )
         )
         size = 0
 
