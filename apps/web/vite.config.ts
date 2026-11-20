@@ -1,9 +1,19 @@
+import { createLogger } from "vite";
 import { defineConfig } from "vitest/config";
 
+const logger = createLogger();
+const writeError = logger.error.bind(logger);
+logger.error = (message, options) => {
+  if (message.includes("/api/v1/")) writeError("Local API proxy unavailable");
+  else writeError(message, options);
+};
+
 export default defineConfig({
+  customLogger: logger,
   server: {
     host: "127.0.0.1",
     proxy: {
+      "/api/v1/": { target: "http://127.0.0.1:8000" },
       "^/health/ready(?:\\?.*)?$": {
         target: "http://127.0.0.1:8000",
         bypass(request) {

@@ -2,6 +2,7 @@ from alembic import context
 from sqlalchemy import text
 
 from api_sentinel.database import open_engine
+from api_sentinel.identity import models as identity_models  # noqa: F401
 from api_sentinel.organizations.models import Base
 
 if context.is_offline_mode():

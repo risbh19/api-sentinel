@@ -42,7 +42,7 @@ export function App() {
             setAttempt((previous) => previous + 1);
           }}>Check again</button>
         </section>
-        <aside><h2>Monitoring workspace</h2><p>This build supports service health checks. Event collection and project monitoring are planned.</p></aside>
+        <aside><h2>Monitoring workspace</h2><p><a href="#workspace">Open your project workspace</a></p></aside>
       </main>
     </>
   );

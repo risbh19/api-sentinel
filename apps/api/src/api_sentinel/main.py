@@ -1,29 +1,62 @@
 import json
 import logging
-from collections.abc import Awaitable, Callable
+import os
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import Engine
 from starlette.middleware.base import RequestResponseEndpoint
 
+from api_sentinel.database import open_engine
 from api_sentinel.health import database_ready
+from api_sentinel.identity.body_limit import AccessBodyLimit
+from api_sentinel.identity.routes import router
+from api_sentinel.identity.security import web_origin
 
 
 class Health(BaseModel):
     status: Literal["ok", "ready", "unavailable"]
 
 
-def create_app(probe: Callable[[], Awaitable[bool]] = database_ready) -> FastAPI:
-    app = FastAPI(title="API Sentinel", docs_url=None, redoc_url=None)
+def create_app(
+    probe: Callable[[], Awaitable[bool]] = database_ready, *, engine: Engine | None = None
+) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        pool = engine
+        if pool is None and os.environ.get("SENTINEL_APP_PASSWORD"):
+            pool = open_engine(application=True)
+        app.state.access_engine = pool
+        try:
+            yield
+        finally:
+            if pool is not None and engine is None:
+                pool.dispose()
+
+    app = FastAPI(title="API Sentinel", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app.state.web_origin = web_origin()
+    app.include_router(router)
+    app.add_middleware(AccessBodyLimit)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_input(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # FastAPI's default payload may echo rejected passwords.
+        return JSONResponse({"detail": "Invalid request fields"}, status_code=422)
 
     @app.middleware("http")
     async def record_request(request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = uuid4().hex
         started = monotonic()
         response = await call_next(request)
+        if request.url.path.startswith("/api/v1/"):
+            response.headers["Cache-Control"] = "no-store"
         response.headers["X-Request-ID"] = request_id
         route = request.scope.get("route")
         logging.getLogger("uvicorn.error").info(
