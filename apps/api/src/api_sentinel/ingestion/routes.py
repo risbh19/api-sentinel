@@ -158,6 +158,16 @@ def check(
     db: DB,
     credential: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
 ) -> Response:
+    authenticate(db, request, credential, project_id)
+    return Response(status_code=204)
+
+
+def authenticate(
+    db: Session,
+    request: Request,
+    credential: HTTPAuthorizationCredentials | None,
+    project_id: UUID | None = None,
+) -> UUID:
     token = (
         credential.credentials
         if credential and len(request.headers.getlist("authorization")) == 1
@@ -165,19 +175,20 @@ def check(
     )
     if re.fullmatch(r"asi_[0-9a-f]{16}\.[A-Za-z0-9_-]{43}", token):
         # PostgreSQL rechecks the live-row condition after concurrent revocation.
-        key_id = db.scalar(
-            update(IngestionKey)
-            .where(
-                IngestionKey.prefix == token[:20],
-                IngestionKey.key_hash == digest(token),
-                IngestionKey.project_id == project_id,
-                IngestionKey.revoked_at.is_(None),
-            )
-            .values(last_used_at=func.clock_timestamp())
-            .returning(IngestionKey.id)
+        statement = update(IngestionKey).where(
+            IngestionKey.prefix == token[:20],
+            IngestionKey.key_hash == digest(token),
+            IngestionKey.revoked_at.is_(None),
         )
-        if key_id is not None:
-            return Response(status_code=204)
+        if project_id is not None:
+            statement = statement.where(IngestionKey.project_id == project_id)
+        project = db.scalar(
+            statement.values(last_used_at=func.clock_timestamp()).returning(
+                IngestionKey.project_id
+            )
+        )
+        if isinstance(project, UUID):
+            return project
     raise HTTPException(
         401, "Invalid ingestion credential", headers={"WWW-Authenticate": "Bearer"}
     )

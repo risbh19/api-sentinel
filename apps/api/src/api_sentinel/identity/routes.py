@@ -169,7 +169,13 @@ def authorize(db: Session, user: User, org_id: UUID, permission: Permission) -> 
             )
             .with_for_update(
                 read=permission
-                in (Permission.READ_AUDIT, Permission.READ_INVENTORY, Permission.READ_KEYS)
+                in (
+                    Permission.READ_AUDIT,
+                    Permission.READ_INVENTORY,
+                    Permission.READ_KEYS,
+                    Permission.READ_EVENTS,
+                    Permission.READ_EVENT_DETAILS,
+                )
             )
         )
         if locked is None:

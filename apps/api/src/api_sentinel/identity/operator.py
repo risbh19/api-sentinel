@@ -42,6 +42,8 @@ def prepare() -> None:
         )
         conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
+        conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")
+        conn.execute("GRANT SELECT, INSERT, UPDATE ON ingestion_state TO sentinel_app")
         conn.execute(
             "GRANT SELECT, INSERT (project_id, label, prefix, key_hash, last_used_at, revoked_at), "
             "UPDATE (revoked_at, last_used_at) ON ingestion_keys TO sentinel_app"

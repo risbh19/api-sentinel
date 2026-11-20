@@ -40,3 +40,4 @@ input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid 
 
 .inventory-table { max-width: 100%; overflow-x: auto; }
 .inventory-table th, .inventory-table td { text-align: left; padding: .4rem .65rem; overflow-wrap: anywhere; }
+[aria-label="Event details"] dd { margin: 0 0 .75rem; overflow-wrap: anywhere; }

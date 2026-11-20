@@ -1,6 +1,6 @@
 # API Sentinel
 
-A local-first API security monitoring application in development. The web workspace supports local sign-in and shows projects from PostgreSQL.
+A local-first API security monitoring application in development. The workspace supports sign-in, project access, OpenAPI inventory, ingestion keys and persisted security events from PostgreSQL.
 The service status page reports FastAPI and database readiness. Open the web
 page to check the connection again after stopping or restarting the database.
 
@@ -172,7 +172,7 @@ python scripts/check_emitter.py YOUR_PROJECT_UUID
 The helper targets the loopback web proxy on port 8080. Pass `--port` for a
 custom web port. For unattended use, supply `SENTINEL_INGESTION_KEY` from your
 emitter's secret store. An accepted check returns HTTP 204 and updates the
-key's last-used timestamp. Event batch submission is the next implementation slice.
+key's last-used timestamp.
 
 | Action under /api/v1/projects/{project_id}/ingestion-keys | Authentication and result |
 | --- | --- |
@@ -190,6 +190,27 @@ key, update the emitter, verify its connection, then revoke the old key. Atomic
 rotation invalidates the old credential immediately. If the issuance response
 is lost, use the masked list to identify and revoke the unclaimed key.
 
+## Submit and explore security events
+
+Create a project key, then send a clearly labeled synthetic event through the
+loopback web proxy. Enter the key at the hidden prompt; keep it out of command arguments.
+
+```sh
+python scripts/emit_event.py --event-id synthetic-login-0001
+```
+
+Repeating that command with the same key and event ID returns a duplicate.
+Open **Events** beside the project to see the real stored observation. Filter
+by a time range, source, category or HTTP status. Owners, analysts and developers
+can inspect pseudonymized details; viewers receive summaries only.
+
+Existing installations must rerun `python scripts/init_env.py` before rebuilding.
+This adds a missing event pseudonymization key while preserving existing secrets.
+See [event contracts and privacy](docs/event-ingestion.md) for the batch schema,
+atomic error behavior, quotas, pagination, key rotation and retention boundaries.
+Detection jobs, rules, alerts and incidents follow in later slices; stored events
+alone do not indicate an exploited vulnerability.
+
 ## Apply the database migrations
 
 With the local Compose database running, apply the revision and check the
@@ -203,9 +224,11 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0005_ingestion_keys`. Reapplying it preserves
+The current revision is `0006_security_events`. Reapplying it preserves
 existing rows. The test service creates a separate temporary database per
-test and exercises upgrade, downgrade and reapply there. A downgrade to
+test and exercises upgrade, downgrade and reapply there. Downgrading to
+`0005_ingestion_keys` deletes event records, sources and ingestion counters;
+identity, keys, inventory and audit history remain. A downgrade to
 `0004_api_inventory` removes credential storage and refuses to discard key audit
 facts that the older schema cannot represent. A downgrade to
 `0003_audit_activity` drops the inventory tables. If an import has been
@@ -263,8 +286,8 @@ documented servers disable request access logs. Health responses carry
 service state only. The records schema stores organization and project names,
 project slugs, UUIDs and creation timestamps. The identity schema also stores account email, password hash, active status, roles,
 session digests and expiry, and bounded login counters. No public registration or
-password recovery is available in this slice. Event ingestion, detection
-and incident management remain planned.
+password recovery is available in this slice. Security event storage and queries
+are available. Detection processing and incident management remain planned.
 
 [Runtime decision](docs/decisions/0001-local-runtime.md) ·
 [Implementation status](docs/implementation-status.md) · [License](LICENSE)
