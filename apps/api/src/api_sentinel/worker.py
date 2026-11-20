@@ -12,6 +12,7 @@ from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import OperationalError
 
 from api_sentinel.database import open_engine
+from api_sentinel.detections.rules import evaluate_event
 
 BATCH_SIZE = 16
 LEASE = timedelta(seconds=30)
@@ -40,21 +41,11 @@ def claim(engine: Engine) -> list[tuple[UUID, int]]:
         return [(event_id, attempt) for event_id, attempt, state in rows if state == "running"]
 
 
-def delivery_delay(conn: Connection, event_id: UUID) -> int:
-    delta = conn.execute(
-        text("""
-        SELECT received_at - occurred_at FROM security_events WHERE id = :id
-    """),
-        {"id": event_id},
-    ).scalar_one()
-    return int(delta // timedelta(milliseconds=1))
-
-
 def process(
     engine: Engine,
     event_id: UUID,
     attempt: int,
-    handler: Callable[[Connection, UUID], int] = delivery_delay,
+    handler: Callable[[Connection, UUID], int] = evaluate_event,
 ) -> bool:
     with engine.begin() as conn:
         # The generation and row lock fence a stale owner, including during result persistence.

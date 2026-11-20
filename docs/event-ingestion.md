@@ -125,8 +125,8 @@ databases for rollback tests and back up valuable data first.
 ## Worker processing
 
 Run `python scripts/init_env.py` on upgrade to add the worker credential. The
-Compose bootstrap grants the worker access to job state and the three event
-columns needed to measure delivery delay. The API process keeps its own login.
+Compose bootstrap grants the worker access to job state, the event fields used
+by detection rules and finding storage. The API process keeps its own login.
 
 An insert trigger queues each new event in the same transaction. Migration
 0007 also queues existing events. Replayed deliveries keep their original job.
@@ -147,5 +147,5 @@ docker compose exec -T worker python -m api_sentinel.worker --status
 
 Operators can inspect `event_jobs.last_error_code` for `processing_failed` or
 `lease_expired`. Removing an event also removes its job. Downgrading to 0006
-discards job history; re-upgrading queues retained events again. Detection
-rules, alerts, incidents and automated retention are planned separately.
+discards job history; re-upgrading queues retained events again. The worker
+evaluates the [versioned detection rules](detection-rules.md) in its job transaction.

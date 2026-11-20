@@ -51,8 +51,10 @@ def prepare() -> None:
             "GRANT SELECT, UPDATE (state, attempts, available_at, last_error_code, delivery_delay_ms) ON event_jobs TO sentinel_worker"
         )
         conn.execute(
-            "GRANT SELECT (id, occurred_at, received_at) ON security_events TO sentinel_worker"
+            "GRANT SELECT (id, project_id, source_id, external_event_id, occurred_at, received_at, "
+            "event_type, actor_hash, client_hash, method, route_template) ON security_events TO sentinel_worker"
         )
+        conn.execute("GRANT SELECT, INSERT, UPDATE (evidence) ON rule_findings TO sentinel_worker")
         conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT, UPDATE ON ingestion_state TO sentinel_app")
