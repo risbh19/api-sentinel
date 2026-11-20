@@ -2,7 +2,7 @@
 
 [Application setup](https://github.com/risbh19/api-sentinel/pull/4) merged at
 `68b63c5`. Windows Docker testing confirmed startup and database outage recovery.
-The worker runs as an idle scaffold.
+That revision introduced the worker scaffold.
 
 [Project records](https://github.com/risbh19/api-sentinel/pull/5) merged at
 `efae961` with the initial Alembic migration and organization-scoped project
@@ -20,6 +20,9 @@ storage.
 [Integration keys](https://github.com/risbh19/api-sentinel/pull/9) merged at
 `8c7a207` with one-time credentials, rotation, revocation and a local emitter check.
 
-The event-ingestion branch adds atomic, project-key authenticated event batches,
-pseudonymization, replay deduplication and a scoped event explorer. It is pending
-PR review and merge. Durable detection work and worker recovery are the next slice.
+[Event ingestion](https://github.com/risbh19/api-sentinel/pull/10) merged at
+`912296a` with atomic project-scoped batches, pseudonymization, replay
+deduplication and the event explorer.
+
+The event-processing branch adds a durable job per event, worker recovery
+and aggregate queue status. The next slice evaluates detection rules.

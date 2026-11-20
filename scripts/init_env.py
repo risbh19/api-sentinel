@@ -21,6 +21,7 @@ def main() -> None:
             "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
             "SENTINEL_PROBE_PASSWORD": secrets.token_urlsafe(32),
             "SENTINEL_APP_PASSWORD": secrets.token_urlsafe(32),
+            "SENTINEL_WORKER_PASSWORD": secrets.token_urlsafe(32),
             "SENTINEL_EVENT_HMAC_KEY": secrets.token_hex(32),
         }
         if path.exists():

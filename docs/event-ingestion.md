@@ -122,5 +122,30 @@ update/delete API and the application database role has no event update/delete
 grant. Downgrading revision 0006 explicitly discards telemetry; use disposable
 databases for rollback tests and back up valuable data first.
 
-This slice stores observations. The worker is still idle: durable job handoff,
-recovery, rules, alerts, automated retention and incidents are subsequent work.
+## Worker processing
+
+Run `python scripts/init_env.py` on upgrade to add the worker credential. The
+Compose bootstrap grants the worker access to job state and the three event
+columns needed to measure delivery delay. The API process keeps its own login.
+
+An insert trigger queues each new event in the same transaction. Migration
+0007 also queues existing events. Replayed deliveries keep their original job.
+Each worker claims up to 16 due jobs using PostgreSQL row locks and skips rows
+another worker holds. A claim has a 30-second lease. After a crash, another
+worker can claim an expired lease. The attempt number fences stale workers.
+Completion and the signed millisecond difference between receipt and occurrence
+commit together. A future-dated observation can have a negative delay.
+
+Handler failures roll back partial results and reschedule after 1, 2, 4 or 8
+seconds. Five failed or abandoned attempts leave the job in the `dead` state
+for operator inspection. Database outages cause the worker to reconnect.
+Inspect aggregate job counts and the age of the oldest open job in seconds:
+
+```sh
+docker compose exec -T worker python -m api_sentinel.worker --status
+```
+
+Operators can inspect `event_jobs.last_error_code` for `processing_failed` or
+`lease_expired`. Removing an event also removes its job. Downgrading to 0006
+discards job history; re-upgrading queues retained events again. Detection
+rules, alerts, incidents and automated retention are planned separately.
