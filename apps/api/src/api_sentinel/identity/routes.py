@@ -6,12 +6,14 @@ from uuid import UUID
 
 from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, field_validator
 from sqlalchemy import Engine, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from api_sentinel.audit.records import Action, record
 from api_sentinel.database import transaction
 from api_sentinel.organizations.models import Organization, Project
 from api_sentinel.organizations.records import OrganizationRecords
@@ -165,7 +167,7 @@ def authorize(db: Session, user: User, org_id: UUID, permission: Permission) -> 
                     select(Membership.organization_id).where(Membership.user_id == user.id)
                 ),
             )
-            .with_for_update()
+            .with_for_update(read=permission == Permission.READ_AUDIT)
         )
         if locked is None:
             raise HTTPException(404, "Organization not found")
@@ -176,24 +178,39 @@ def authorize(db: Session, user: User, org_id: UUID, permission: Permission) -> 
         raise HTTPException(403, "Insufficient permission")
 
 
-@router.post("/auth/login")
-def login(body: Credentials, request: Request, response: Response, db: DB) -> Identity:
+@router.post("/auth/login", response_model=Identity)
+def login(body: Credentials, request: Request, response: Response, db: DB) -> Identity | Response:
     trusted_origin(request)
     if not allow_login(engine_for(request), body.email):
         raise HTTPException(429, "Too many sign-in attempts", headers={"Retry-After": "60"})
     user = db.scalar(select(User).where(User.email == body.email))
+    verified: bool
     try:
-        HASHER.verify(
+        verified = HASHER.verify(
             user.password_hash if user is not None else DUMMY_HASH,
             body.password.get_secret_value(),
         )
     except VerifyMismatchError:
-        raise HTTPException(401, "Invalid sign-in details") from None
-    if user is None or not user.active:
-        raise HTTPException(401, "Invalid sign-in details")
+        verified = False
+    if not verified or user is None or not user.active:
+        # Return normally so the anonymized failure commits before the 401 is sent.
+        record(db, Action.LOGIN_FAILED, request_id=request.state.request_id)
+        return JSONResponse({"detail": "Invalid sign-in details"}, status_code=401)
     old = request.cookies.get(COOKIE)
     if old:
-        db.execute(delete(WebSession).where(WebSession.token_hash == digest(old)))
+        previous_user = db.scalar(
+            delete(WebSession)
+            .where(WebSession.token_hash == digest(old), WebSession.expires_at > func.now())
+            .returning(WebSession.user_id)
+        )
+        if previous_user is not None:
+            # Switching accounts must not reveal the new identity in the old account's feed.
+            record(
+                db,
+                Action.SESSION_REPLACED,
+                subject_user_id=previous_user,
+                request_id=request.state.request_id,
+            )
     db.execute(delete(WebSession).where(WebSession.expires_at <= func.now()))
     token = secrets.token_urlsafe(32)
     db.add(
@@ -202,6 +219,13 @@ def login(body: Credentials, request: Request, response: Response, db: DB) -> Id
             user_id=user.id,
             expires_at=datetime.now(UTC) + timedelta(seconds=SESSION_SECONDS),
         )
+    )
+    record(
+        db,
+        Action.LOGIN,
+        actor_id=user.id,
+        subject_user_id=user.id,
+        request_id=request.state.request_id,
     )
     response.set_cookie(
         COOKIE,
@@ -222,7 +246,19 @@ def me(request: Request, user: Principal, db: DB) -> Identity:
 
 @router.post("/auth/logout", status_code=204)
 def logout(request: Request, response: Response, user: Principal, db: DB) -> None:
-    db.execute(delete(WebSession).where(WebSession.token_hash == digest(request.cookies[COOKIE])))
+    revoked_user = db.scalar(
+        delete(WebSession)
+        .where(WebSession.token_hash == digest(request.cookies[COOKIE]))
+        .returning(WebSession.user_id)
+    )
+    if revoked_user is not None:
+        record(
+            db,
+            Action.LOGOUT,
+            actor_id=user.id,
+            subject_user_id=revoked_user,
+            request_id=request.state.request_id,
+        )
     response.delete_cookie(
         COOKIE,
         path=COOKIE_PATH,
@@ -244,12 +280,22 @@ def projects(
 
 
 @router.post("/organizations/{org_id}/projects", status_code=201)
-def create_project(org_id: UUID, body: ProjectInput, user: Principal, db: DB) -> ProjectInfo:
+def create_project(
+    org_id: UUID, request: Request, body: ProjectInput, user: Principal, db: DB
+) -> ProjectInfo:
     authorize(db, user, org_id, Permission.EDIT_PROJECT)
     try:
         project = OrganizationRecords(db, org_id).create_project(body.name, body.slug)
     except IntegrityError:
         raise HTTPException(409, "Project conflicts with an existing record") from None
+    record(
+        db,
+        Action.PROJECT_CREATED,
+        organization_id=org_id,
+        project_id=project.id,
+        actor_id=user.id,
+        request_id=request.state.request_id,
+    )
     return ProjectInfo.model_validate(project)
 
 
@@ -266,10 +312,21 @@ def project_detail(project_id: UUID, user: Principal, db: DB) -> ProjectInfo:
 
 
 @router.delete("/organizations/{org_id}/projects/{project_id}", status_code=204)
-def remove_project(org_id: UUID, project_id: UUID, user: Principal, db: DB) -> None:
+def remove_project(
+    org_id: UUID, project_id: UUID, request: Request, user: Principal, db: DB
+) -> None:
     authorize(db, user, org_id, Permission.DELETE_PROJECT)
     if not OrganizationRecords(db, org_id).delete_project(project_id):
         raise HTTPException(404, "Project not found")
+
+    record(
+        db,
+        Action.PROJECT_DELETED,
+        organization_id=org_id,
+        project_id=project_id,
+        actor_id=user.id,
+        request_id=request.state.request_id,
+    )
 
 
 def preserve_owner(db: Session, org_id: UUID, target: UUID, new_role: Role | None) -> None:
@@ -291,10 +348,16 @@ def preserve_owner(db: Session, org_id: UUID, target: UUID, new_role: Role | Non
 
 
 @router.put("/organizations/{org_id}/members/{target}", status_code=204)
-def set_member(org_id: UUID, target: UUID, body: MemberInput, user: Principal, db: DB) -> None:
+def set_member(
+    org_id: UUID, target: UUID, request: Request, body: MemberInput, user: Principal, db: DB
+) -> None:
     authorize(db, user, org_id, Permission.MANAGE_MEMBERS)
     if db.scalar(select(User.id).where(User.id == target, User.active.is_(True))) is None:
         raise HTTPException(404, "User not found")
+    current = db.get(Membership, (org_id, target))
+    previous_role = Role(current.role) if current else None
+    if previous_role == body.role:
+        return
     preserve_owner(db, org_id, target, body.role)
     db.execute(
         insert(Membership)
@@ -305,17 +368,35 @@ def set_member(org_id: UUID, target: UUID, body: MemberInput, user: Principal, d
         )
     )
 
+    record(
+        db,
+        Action.MEMBER_ADDED if previous_role is None else Action.ROLE_CHANGED,
+        organization_id=org_id,
+        actor_id=user.id,
+        subject_user_id=target,
+        old_role=previous_role,
+        new_role=body.role,
+        request_id=request.state.request_id,
+    )
+
 
 @router.delete("/organizations/{org_id}/members/{target}", status_code=204)
-def remove_member(org_id: UUID, target: UUID, user: Principal, db: DB) -> None:
+def remove_member(org_id: UUID, target: UUID, request: Request, user: Principal, db: DB) -> None:
     authorize(db, user, org_id, Permission.MANAGE_MEMBERS)
     preserve_owner(db, org_id, target, None)
-    if (
-        db.scalar(
-            delete(Membership)
-            .where(Membership.organization_id == org_id, Membership.user_id == target)
-            .returning(Membership.user_id)
-        )
-        is None
-    ):
+    old_role = db.scalar(
+        delete(Membership)
+        .where(Membership.organization_id == org_id, Membership.user_id == target)
+        .returning(Membership.role)
+    )
+    if old_role is None:
         raise HTTPException(404, "Membership not found")
+    record(
+        db,
+        Action.MEMBER_REMOVED,
+        organization_id=org_id,
+        actor_id=user.id,
+        subject_user_id=target,
+        old_role=Role(old_role),
+        request_id=request.state.request_id,
+    )

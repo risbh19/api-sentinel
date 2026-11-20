@@ -21,6 +21,8 @@ try {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByText("Smoke API", { exact: false }).waitFor();
+  await page.getByRole("button", { name: "View audit activity" }).click();
+  await page.getByText("Project created", { exact: true }).waitFor();
   await page.reload();
   await page.getByText(email, { exact: true }).waitFor();
   await page.getByRole("button", { name: "Sign out" }).click();

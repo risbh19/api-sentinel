@@ -81,6 +81,42 @@ origins. Passwords use Argon2id and only a digest of each session token is
 stored. Within a database-clock minute login permits 100 attempts overall
 and eight per email hash bucket. Accounts sharing a bucket share its limit.
 
+## Read security activity
+
+In the project workspace, owners and analysts can select **View audit activity**
+for their current organization. Entries show the actor, affected project or
+member, timestamp and role changes. Project deletion preserves its history.
+Developer and viewer roles cannot read organization audit history.
+
+| GET endpoint under /api/v1 | Scope |
+| --- | --- |
+| /auth/activity | Signed-in user's provisioning and session history |
+| /organizations/{org_id}/audit | Current owner's or analyst's organization history |
+| /organizations/{org_id}/audit?project_id={id} | Same permissions, filtered to one project including deleted projects |
+
+Pages return `entries` newest first and `next_cursor`. Pass its value as
+`before` to fetch older entries with the same filter. `limit` defaults to 50
+and accepts 1–100. A cursor must identify an entry visible in that query.
+
+The audit record and its successful mutation commit together. Entries contain
+fixed action names, UUIDs, a database timestamp, and applicable old/new roles.
+HTTP operations use the server-generated request ID from the response.
+A new sign-in that replaces a live cookie records the replacement in the old
+account's history without disclosing the new user's identity. Local operator
+actions have no HTTP request ID or signed-in actor. Repeating
+an unchanged role assignment creates no additional record.
+
+Failed credential checks produce anonymous entries available to a database
+operator. Throttled or malformed requests only appear in minimal request logs.
+Audit entries omit emails, project names, passwords, tokens, headers, addresses
+and request bodies. Account activity is separate from organization history.
+
+Audit history begins at this migration and is retained in the local volume until
+an administrator deliberately removes it. The application role can read and
+append entries. PostgreSQL rejects ordinary updates, deletes and truncation.
+A database administrator controls the schema and backups. There is no external
+tamper-proof archive or scheduled audit cleanup.
+
 ## Apply the database migrations
 
 With the local Compose database running, apply the revision and check the
@@ -94,9 +130,11 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0002_project_access`. Reapplying it preserves
+The current revision is `0003_audit_activity`. Reapplying it preserves
 existing rows. The test service creates a separate temporary database per
-test and exercises upgrade, downgrade and reapply there. Downgrading to `0001_project_records` deletes identity and session data.
+test and exercises upgrade, downgrade and reapply there. Downgrading to
+`0002_project_access` deletes audit history and preserves accounts and projects.
+Downgrading to `0001_project_records` deletes identity and session data.
 Downgrading to base also deletes organization and project data. Use a disposable database
 for rollback tests. Back up retained records before an intentional rollback.
 

@@ -6,6 +6,10 @@ The worker runs as an idle scaffold.
 
 [Project records](https://github.com/risbh19/api-sentinel/pull/5) merged at
 `efae961` with the initial Alembic migration and organization-scoped project
-storage. The project-access branch adds local sign-in, server-side sessions,
-organization roles, protected project endpoints and the web workspace.
-The next planned slice records security-relevant audit activity.
+storage.
+
+[Project access](https://github.com/risbh19/api-sentinel/pull/6) merged at
+`ef49819` with local sign-in, server-side sessions and organization roles.
+The audit-activity branch records session, project and membership changes
+and adds a scoped reader to the web workspace. The next planned slice
+imports local OpenAPI documents into project inventory.

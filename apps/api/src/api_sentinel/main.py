@@ -12,8 +12,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import Engine
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import TimeoutError as PoolTimeout
 from starlette.middleware.base import RequestResponseEndpoint
 
+from api_sentinel.audit.routes import router as audit_router
 from api_sentinel.database import open_engine
 from api_sentinel.health import database_ready
 from api_sentinel.identity.body_limit import AccessBodyLimit
@@ -43,6 +46,7 @@ def create_app(
     app = FastAPI(title="API Sentinel", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.web_origin = web_origin()
     app.include_router(router)
+    app.include_router(audit_router)
     app.add_middleware(AccessBodyLimit)
 
     @app.exception_handler(RequestValidationError)
@@ -50,9 +54,15 @@ def create_app(
         # FastAPI's default payload may echo rejected passwords.
         return JSONResponse({"detail": "Invalid request fields"}, status_code=422)
 
+    @app.exception_handler(DBAPIError)
+    @app.exception_handler(PoolTimeout)
+    async def storage_unavailable(request: Request, exc: DBAPIError | PoolTimeout) -> JSONResponse:
+        return JSONResponse({"detail": "Database operation unavailable"}, status_code=503)
+
     @app.middleware("http")
     async def record_request(request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = uuid4().hex
+        request.state.request_id = request_id
         started = monotonic()
         response = await call_next(request)
         if request.url.path.startswith("/api/v1/"):
