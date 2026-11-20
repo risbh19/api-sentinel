@@ -87,3 +87,32 @@ class SecurityEvent(Base):
     actor_hash: Mapped[str | None] = mapped_column(sa.String(64))
     client_hash: Mapped[str | None] = mapped_column(sa.String(64))
     pseudonym_version: Mapped[str] = mapped_column(sa.String(16))
+
+
+class EventJob(Base):
+    __tablename__ = "event_jobs"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "state IN ('pending','running','succeeded','dead')", name="ck_job_state"
+        ),
+        sa.CheckConstraint("attempts BETWEEN 0 AND 5", name="ck_job_attempts"),
+        sa.Index(
+            "ix_event_jobs_due",
+            "available_at",
+            "event_id",
+            postgresql_where=sa.text("state IN ('pending','running')"),
+        ),
+    )
+    event_id: Mapped[UUID] = mapped_column(
+        sa.ForeignKey("security_events.id", ondelete="CASCADE"), primary_key=True
+    )
+    state: Mapped[str] = mapped_column(sa.Text(), server_default=sa.text("'pending'"))
+    attempts: Mapped[int] = mapped_column(server_default=sa.text("0"))
+    queued_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now()
+    )
+    available_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now()
+    )
+    last_error_code: Mapped[str | None] = mapped_column(sa.Text())
+    delivery_delay_ms: Mapped[int | None] = mapped_column(sa.BigInteger())

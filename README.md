@@ -19,7 +19,8 @@ python scripts/smoke.py
 Open [Service status](http://127.0.0.1:8080). The API is available on port
 8000. Only the web and API ports are published, both on loopback. Set
 `WEB_PORT` or `API_PORT` in .env to change them and pass the corresponding
-ports to the smoke script. The worker reports its idle state at startup.
+ports to the smoke script. To inspect processing lag, run
+`docker compose exec -T worker python -m api_sentinel.worker --status`.
 
 | Route | Success | Database unavailable |
 | --- | --- | --- |
@@ -224,7 +225,9 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0006_security_events`. Reapplying it preserves
+The current revision is `0007_event_jobs`. It queues previously stored events.
+Downgrading to `0006_security_events` discards job history and keeps events.
+Reapplying the head revision without a downgrade preserves
 existing rows. The test service creates a separate temporary database per
 test and exercises upgrade, downgrade and reapply there. Downgrading to
 `0005_ingestion_keys` deletes event records, sources and ingestion counters;
@@ -262,7 +265,8 @@ Run `npm ci` and `npm run dev` in apps/web and open that exact origin.
 Restore the Compose web origin when returning to the packaged UI.
 For native API development, set PGHOST, PGPORT and PGDATABASE for a local
 PostgreSQL database. With the administrator PGUSER and PGPASSWORD, set
-SENTINEL_APP_PASSWORD to a generated secret of at least 32 characters and run
+SENTINEL_APP_PASSWORD and SENTINEL_WORKER_PASSWORD to distinct generated secrets
+of at least 32 characters each and run
 `uv run --locked python -m api_sentinel.identity.operator prepare`
 from apps/api with PYTHONPATH set to src. If you already ran Compose setup,
 use its provisioned roles and app credential instead. Start the server with

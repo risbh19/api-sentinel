@@ -25,6 +25,7 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD:?Run scripts/init_env.py}
       SENTINEL_APP_PASSWORD: ${SENTINEL_APP_PASSWORD:?Run scripts/init_env.py}
+      SENTINEL_WORKER_PASSWORD: ${SENTINEL_WORKER_PASSWORD:?Run scripts/init_env.py}
     depends_on:
       db: {condition: service_healthy}
     command: ["python", "-m", "api_sentinel.identity.operator", "prepare"]
@@ -70,6 +71,13 @@ services:
       retries: 12
   worker:
     <<: *app
+    environment:
+      PGHOST: db
+      PGDATABASE: sentinel
+      PGUSER: sentinel_worker
+      PGPASSWORD: ${SENTINEL_WORKER_PASSWORD:?Run scripts/init_env.py}
+    depends_on:
+      access-init: {condition: service_completed_successfully}
     command: ["python", "-m", "api_sentinel.worker"]
   web:
     build: ./apps/web

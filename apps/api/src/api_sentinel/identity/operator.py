@@ -23,24 +23,36 @@ from .security import HASHER, Role, display_name, normalized_email
 
 
 def prepare() -> None:
-    password = os.environ["SENTINEL_APP_PASSWORD"]
-    if len(password) < 32:
-        raise SystemExit("Run scripts/init_env.py to generate the application credential")
+    passwords = {
+        "sentinel_app": os.environ["SENTINEL_APP_PASSWORD"],
+        "sentinel_worker": os.environ["SENTINEL_WORKER_PASSWORD"],
+    }
+    if any(len(value) < 32 for value in passwords.values()):
+        raise SystemExit("Run scripts/init_env.py to generate the service credentials")
     command.upgrade(Config("alembic.ini"), "head")
     with psycopg.connect() as conn:
         conn.execute("SELECT pg_advisory_xact_lock(173824, 2)")
-        if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname='sentinel_app'").fetchone():
-            conn.execute("CREATE ROLE sentinel_app LOGIN")
-        verifier = conn.pgconn.encrypt_password(
-            password.encode(), b"sentinel_app", b"scram-sha-256"
-        ).decode()
-        conn.execute(sql.SQL("ALTER ROLE sentinel_app PASSWORD {}").format(sql.Literal(verifier)))
-        conn.execute(
-            sql.SQL("GRANT CONNECT ON DATABASE {} TO sentinel_app").format(
-                sql.Identifier(conn.info.dbname)
+        for name, password in passwords.items():
+            role = sql.Identifier(name)
+            if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (name,)).fetchone():
+                conn.execute(sql.SQL("CREATE ROLE {} LOGIN").format(role))
+            verifier = conn.pgconn.encrypt_password(
+                password.encode(), name.encode(), b"scram-sha-256"
+            ).decode()
+            conn.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(role, sql.Literal(verifier)))
+            conn.execute(
+                sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
+                    sql.Identifier(conn.info.dbname), role
+                )
             )
+        conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app, sentinel_worker")
+        conn.execute("GRANT INSERT (event_id) ON event_jobs TO sentinel_app")
+        conn.execute(
+            "GRANT SELECT, UPDATE (state, attempts, available_at, last_error_code, delivery_delay_ms) ON event_jobs TO sentinel_worker"
         )
-        conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app")
+        conn.execute(
+            "GRANT SELECT (id, occurred_at, received_at) ON security_events TO sentinel_worker"
+        )
         conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT, UPDATE ON ingestion_state TO sentinel_app")
