@@ -17,6 +17,7 @@ class Action(StrEnum):
     LOGIN_FAILED = "session.login_failed"
     SESSION_REPLACED = "session.replaced"
     LOGOUT = "session.logout"
+    INVENTORY_IMPORTED = "inventory.imported"
     PROJECT_CREATED = "project.created"
     PROJECT_DELETED = "project.deleted"
     MEMBER_ADDED = "member.added"

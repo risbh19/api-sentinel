@@ -10,6 +10,8 @@ storage.
 
 [Project access](https://github.com/risbh19/api-sentinel/pull/6) merged at
 `ef49819` with local sign-in, server-side sessions and organization roles.
-The audit-activity branch records session, project and membership changes
-and adds a scoped reader to the web workspace. The next planned slice
-imports local OpenAPI documents into project inventory.
+
+[Audit activity](https://github.com/risbh19/api-sentinel/pull/7) merged at
+`c09615e` with append-only history and a scoped workspace reader.
+The api-inventory branch imports local OpenAPI contracts into versioned
+project inventories. The next planned slice adds scoped ingestion keys.

@@ -167,7 +167,7 @@ def authorize(db: Session, user: User, org_id: UUID, permission: Permission) -> 
                     select(Membership.organization_id).where(Membership.user_id == user.id)
                 ),
             )
-            .with_for_update(read=permission == Permission.READ_AUDIT)
+            .with_for_update(read=permission in (Permission.READ_AUDIT, Permission.READ_INVENTORY))
         )
         if locked is None:
             raise HTTPException(404, "Organization not found")

@@ -41,6 +41,7 @@ def prepare() -> None:
             )
         )
         conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app")
+        conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
         conn.execute("GRANT SELECT ON audit_entries TO sentinel_app")
         conn.execute(
             "GRANT INSERT (action, organization_id, project_id, actor_id, subject_user_id, "

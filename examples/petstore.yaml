@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: Synthetic pet service
+  version: "1.0"
+components:
+  securitySchemes:
+    localSession:
+      type: http
+      scheme: bearer
+security:
+  - localSession: []
+paths:
+  /pets/{petId}:
+    parameters:
+      - in: path
+        name: petId
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPet
+      responses:
+        "200": { description: Found }
+  /status:
+    get:
+      operationId: getStatus
+      security: []
+      responses:
+        "200": { description: Healthy }

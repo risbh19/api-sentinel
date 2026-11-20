@@ -37,3 +37,6 @@ input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid 
 .audit-entries li { margin-block: 1rem; }
 .audit-entries dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .3rem .8rem; }
 .audit-entries dd { margin: 0; overflow-wrap: anywhere; }
+
+.inventory-table { max-width: 100%; overflow-x: auto; }
+.inventory-table th, .inventory-table td { text-align: left; padding: .4rem .65rem; overflow-wrap: anywhere; }

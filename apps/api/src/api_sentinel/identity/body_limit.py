@@ -1,5 +1,9 @@
+import re
+
 from fastapi import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from api_sentinel.inventory.parser import MAX_BYTES
 
 
 class AccessBodyLimit:
@@ -12,13 +16,19 @@ class AccessBodyLimit:
         if scope["type"] != "http" or not scope["path"].startswith("/api/v1/"):
             await self.app(scope, receive, send)
             return
+        limit = (
+            MAX_BYTES
+            if scope["method"] == "POST"
+            and re.fullmatch(r"/api/v1/projects/[0-9a-fA-F-]{32,36}/imports", scope["path"])
+            else 16384
+        )
         size = 0
 
         async def limited_receive() -> Message:
             nonlocal size
             message = await receive()
             size += len(message.get("body", b""))
-            if size > 16384:
+            if size > limit:
                 raise HTTPException(413, "Request body too large")
             return message
 

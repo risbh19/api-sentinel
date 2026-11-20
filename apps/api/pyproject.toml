@@ -7,12 +7,19 @@ dependencies = [
     "argon2-cffi==25.1.0",
     "fastapi==0.165.0",
     "psycopg[binary]==3.3.9",
+    "pyyaml==6.0.3",
     "sqlalchemy==2.1.9",
     "uvicorn==0.54.0",
 ]
 
 [dependency-groups]
-dev = ["httpx2==2.16.2", "mypy==2.4.1", "pytest==9.2.0", "ruff==0.17.6"]
+dev = [
+    "httpx2==2.16.2",
+    "mypy==2.4.1",
+    "pytest==9.2.0",
+    "ruff==0.17.6",
+    "types-pyyaml==6.0.12.20261113",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 
 const labels: Record<string, string> = {
+  "inventory.imported": "Inventory imported",
   "project.created": "Project created",
   "project.deleted": "Project deleted",
   "member.added": "Member added",

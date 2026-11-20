@@ -117,6 +117,43 @@ append entries. PostgreSQL rejects ordinary updates, deletes and truncation.
 A database administrator controls the schema and backups. There is no external
 tamper-proof archive or scheduled audit cleanup.
 
+## Import a project contract
+
+In the workspace, select **Inventory** beside a project, choose a local file
+and select **Import file**. Try [the synthetic pet service](examples/petstore.yaml).
+It declares two GET operations. The pet operation inherits the contract's
+`localSession` security requirement and the status operation clears it.
+
+Owners, analysts and developers can import. All four project roles can browse
+methods, path templates, operation IDs and declared security. Security
+alternatives preserve the contract's AND/OR groups and scopes. An inventory
+describes the uploaded contract. The importer never contacts a declared server.
+
+| Endpoint under /api/v1/projects/{project_id} | Behavior |
+| --- | --- |
+| POST /imports | Send the raw UTF-8 file body as application/json, application/yaml or text/yaml using the normal session, Origin and CSRF headers. A new revision returns 201. Repeating identical bytes returns 200 and the original revision, even after newer imports. |
+| GET /imports | Read history newest first. Pass the last revision as `before` to read older entries. |
+| GET /endpoints | Browse the latest revision or pass `revision`. Filter by uppercase `method`, and pass the returned revision and `next_offset` to page through a stable snapshot. Both readers accept `limit` from 1 to 100. |
+
+The inventory profile supports OpenAPI 3.0.x and 3.1.x with a paths object.
+It validates inventory fields and local JSON Pointer targets. It does not
+validate every request/response schema. External references, remote uploads,
+compressed bodies, YAML tags, anchors, aliases, multi-document streams,
+dynamic references and percent-encoded pointer escapes are unsupported.
+Path item references must stand alone. Callbacks and webhooks are omitted
+with a warning. Empty paths produce an empty revision with a warning.
+
+Limits include 128 KiB per file, 40 nesting levels, 12,000 parser events or
+nodes, 12,000 expanded path-item and response fields, 500 operations,
+512 characters per path, and 512 KiB of expanded endpoint
+metadata. Scheme names, scopes and operation IDs use up to 128 ASCII letters,
+digits or characters from `._:/-`. Quote YAML string versions such as `"1"`.
+Import errors use fixed messages. The service stores a SHA-256 digest of the
+file, normalized endpoint metadata, format version, warnings and revision time.
+Raw file contents, filenames, example bodies, server URLs and descriptions are
+discarded. Names and paths are visible to authorized project readers. Deleting
+a project removes its inventory revisions and retains its audit entries.
+
 ## Apply the database migrations
 
 With the local Compose database running, apply the revision and check the
@@ -130,9 +167,14 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0003_audit_activity`. Reapplying it preserves
+The current revision is `0004_api_inventory`. Reapplying it preserves
 existing rows. The test service creates a separate temporary database per
-test and exercises upgrade, downgrade and reapply there. Downgrading to
+test and exercises upgrade, downgrade and reapply there. A downgrade to
+`0003_audit_activity` drops the inventory tables. If an import has been
+audited, PostgreSQL refuses this downgrade because the old audit schema cannot
+represent that action. The transaction rolls back and preserves the history.
+Use a pre-upgrade backup for a full restoration to that earlier state.
+Downgrading to
 `0002_project_access` deletes audit history and preserves accounts and projects.
 Downgrading to `0001_project_records` deletes identity and session data.
 Downgrading to base also deletes organization and project data. Use a disposable database
@@ -183,7 +225,7 @@ documented servers disable request access logs. Health responses carry
 service state only. The records schema stores organization and project names,
 project slugs, UUIDs and creation timestamps. The identity schema also stores account email, password hash, active status, roles,
 session digests and expiry, and bounded login counters. No public registration or
-password recovery is available in this slice. Inventory, event ingestion, detection
+password recovery is available in this slice. Event ingestion, detection
 and incident management remain planned.
 
 [Runtime decision](docs/decisions/0001-local-runtime.md) ·
