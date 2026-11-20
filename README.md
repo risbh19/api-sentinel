@@ -58,7 +58,7 @@ For API development, supply libpq's PGHOST, PGPORT, PGDATABASE, PGUSER and
 PGPASSWORD for your local PostgreSQL instance. From apps/api run
 
 ```sh
-uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --host 127.0.0.1 --port 8000 --no-access-log --no-server-header --no-proxy-headers
+uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --loop asyncio:SelectorEventLoop --host 127.0.0.1 --port 8000 --no-access-log --no-server-header --no-proxy-headers
 ```
 
 Run dependency checks from apps/api with `uv audit --locked` and from
