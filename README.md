@@ -46,7 +46,7 @@ python scripts/smoke.py
 
 ## Develop and test
 
-Install uv 0.13.9 and Node.js 24.22.3 with npm. uv reads .python-version and
+Install uv 0.13.9 and Node.js 24.22.3 with npm. uv reads apps/api/.python-version and
 installs Python 3.13.18 when needed. Use `python scripts/check.py` on any
 supported platform or `.\scripts\check.ps1` in PowerShell. This installs from
 both locks, checks Python formatting, lint and types, runs the API and
