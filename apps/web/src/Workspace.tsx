@@ -1,3 +1,4 @@
+import { Integrations } from "./Integrations";
 import { Inventory } from "./Inventory";
 import { AuditActivity } from "./AuditActivity";
 import { api } from "./api";
@@ -9,6 +10,7 @@ type Project = { id: string; name: string; slug: string };
 
 function Projects({ org, token, onExpiry }: { org: Org; token: string; onExpiry: () => void }) {
   const [selected, setSelected] = useState("");
+  const [integration, setIntegration] = useState("");
   const [items, setItems] = useState<Project[]>([]);
   const [cursor, setCursor] = useState("");
   const [more, setMore] = useState(false);
@@ -41,7 +43,9 @@ function Projects({ org, token, onExpiry }: { org: Org; token: string; onExpiry:
   return <section aria-labelledby="project-list">
     <div className="heading"><h2 id="project-list">Projects</h2><span>{org.role}</span></div>
     {items.length > 0 && <ul>{items.map((p) => <li key={p.id}>{p.name} <code>{p.slug}</code>{" "}
-      <button aria-label={"Inventory for " + p.name} aria-expanded={p.id === selected} onClick={() => setSelected(selected === p.id ? "" : p.id)}>Inventory</button>
+      <button aria-label={"Inventory for " + p.name} aria-expanded={p.id === selected} onClick={() => { setIntegration(""); setSelected(selected === p.id ? "" : p.id); }}>Inventory</button>
+      {org.role !== "viewer" && <button aria-label={"Integrations for " + p.name} aria-expanded={p.id === integration} onClick={() => { setSelected(""); setIntegration(integration === p.id ? "" : p.id); }}>Integrations</button>}
+      {p.id === integration && <Integrations key={p.id} project={p.id} writable={org.role === "owner" || org.role === "developer"} csrf={token} onExpiry={onExpiry} />}
       {p.id === selected && <Inventory key={p.id} project={p.id} writable={["owner", "analyst", "developer"].includes(org.role)} token={token} onExpiry={onExpiry} />}</li>)}</ul>}
     {phase === "loading" && <p role="status">Loading projects…</p>}
     {phase === "done" && !items.length && <p>This organization has no projects yet.</p>}

@@ -24,6 +24,7 @@ class Entry(BaseModel):
     organization_id: UUID | None
     project_id: UUID | None
     actor_id: UUID | None
+    key_id: UUID | None
     subject_user_id: UUID | None
     old_role: Role | None
     new_role: Role | None

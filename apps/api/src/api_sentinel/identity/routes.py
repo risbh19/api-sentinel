@@ -167,7 +167,10 @@ def authorize(db: Session, user: User, org_id: UUID, permission: Permission) -> 
                     select(Membership.organization_id).where(Membership.user_id == user.id)
                 ),
             )
-            .with_for_update(read=permission in (Permission.READ_AUDIT, Permission.READ_INVENTORY))
+            .with_for_update(
+                read=permission
+                in (Permission.READ_AUDIT, Permission.READ_INVENTORY, Permission.READ_KEYS)
+            )
         )
         if locked is None:
             raise HTTPException(404, "Organization not found")
@@ -176,6 +179,26 @@ def authorize(db: Session, user: User, org_id: UUID, permission: Permission) -> 
         raise HTTPException(404, "Organization not found")
     if permission not in GRANTS[Role(role)]:
         raise HTTPException(403, "Insufficient permission")
+
+
+def project_scope(db: Session, user: User, project_id: UUID, permission: Permission) -> UUID:
+    org = db.scalar(
+        select(Project.organization_id)
+        .join(Membership, Membership.organization_id == Project.organization_id)
+        .where(Project.id == project_id, Membership.user_id == user.id)
+    )
+    if org is None:
+        raise HTTPException(404, "Project not found")
+    authorize(db, user, org, permission)
+    # Deletion and role changes use the same organization lock.
+    if (
+        db.scalar(
+            select(Project.id).where(Project.id == project_id, Project.organization_id == org)
+        )
+        is None
+    ):
+        raise HTTPException(404, "Project not found")
+    return org
 
 
 @router.post("/auth/login", response_model=Identity)
