@@ -82,6 +82,7 @@ export function useIncidentWrite(access: Access) {
     active.current = controller;
     setBusy(true);
     setError("");
+    let rejected = false;
     try {
       const response = await api(path, {
         method,
@@ -95,14 +96,17 @@ export function useIncidentWrite(access: Access) {
         return;
       }
       if (!response.ok) {
+        rejected = response.status >= 400 && response.status < 500;
         const detail = (await response.json().catch(() => null))?.detail;
         throw new Error(typeof detail === "string" ? detail : "Unable to save the change.");
       }
       const data: { id: string; version: number } = await response.json();
       if (!controller.signal.aborted) return data;
     } catch (err) {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
         setError(err instanceof Error ? err.message : "Unable to confirm the change.");
+        if (!rejected) return "uncertain" as const;
+      }
     } finally {
       if (!controller.signal.aborted) {
         active.current = null;

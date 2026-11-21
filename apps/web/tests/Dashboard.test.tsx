@@ -52,23 +52,21 @@ it("drops a late project response and distinguishes an empty window from a faile
 it("keeps alert evidence hidden for a viewer", async () => {
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          entries: [
-            {
-              id: "a",
-              rule_key: "authentication_failures",
-              source_id: "gateway",
-              severity: "medium",
-              status: "open",
-              last_seen: stamp,
-            },
-          ],
-          next_cursor: null,
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      Response.json({
+        entries: [
+          {
+            id: "a",
+            rule_key: "authentication_failures",
+            source_id: "gateway",
+            severity: "medium",
+            status: "open",
+            last_seen: stamp,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
   );
   render(<Alerts access={{ ...access, role: "viewer" }} promote={() => {}} />);
   await screen.findByText("authentication failures");
@@ -114,4 +112,52 @@ it("refreshes after a conflicting note and keeps the draft for the investigator"
       }),
     ),
   );
+});
+
+it("checks the original timeline entry before retrying a note whose response was lost", async () => {
+  const summary = {
+    id: "case",
+    status: "open",
+    priority: "medium",
+    version: 1,
+    opened_at: stamp,
+    resolved_at: null,
+  };
+  const detail = { ...summary, title: "Review", timeline: [], assignee_id: null };
+  const saved = {
+    ...detail,
+    version: 2,
+    timeline: [
+      {
+        version: 2,
+        action: "note_added",
+        actor_id: "actor",
+        note: "Check once",
+        occurred_at: stamp,
+      },
+    ],
+  };
+  let notes = 0;
+  const fetch = vi.fn(async (url: string, opts?: RequestInit) => {
+    if (opts?.method === "POST") {
+      notes++;
+      throw new TypeError("Connection lost");
+    }
+    if (url.includes("/case?")) return Response.json(notes ? saved : detail);
+    return Response.json([summary]);
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<Incidents access={access} fromAlert="" />);
+  fireEvent.click(await screen.findByRole("button", { name: "View incident case" }));
+  fireEvent.change(await screen.findByLabelText("Investigation note"), {
+    target: { value: "Check once" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+  await screen.findByText("The timeline confirms your note was saved.");
+  expect(screen.queryByRole("button", { name: "Add note" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Write another note" }));
+  expect(((await screen.findByLabelText("Investigation note")) as HTMLTextAreaElement).value).toBe(
+    "",
+  );
+  expect(notes).toBe(1);
 });

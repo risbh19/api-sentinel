@@ -65,13 +65,19 @@ try {
     headers:{Authorization:"Bearer "+ingestionKey}, data:{source_id:payload.source_id,events:rest}
   });
   assert.equal((await batch.json()).accepted,7);
-  await page.waitForFunction(async id => {
-    const res = await fetch("/api/v1/projects/"+id+"/alerts");
-    return res.ok && (await res.json()).entries.some(a=>a.source_id==="synthetic-browser");
-  },project,{timeout:45000,polling:400});
-  await page.getByRole("button",{name:"Alerts for Smoke API"}).click();
-  const alert = page.getByRole("listitem").filter({hasText:"synthetic-browser"});
-  await alert.getByRole("button",{name:/^Inspect alert/}).click();
+  // The worker runs independently of ingestion. Await each API response before
+  // opening the list so the rendered page includes this source's new alert.
+  const deadline = Date.now() + 45000;
+  let alertId;
+  while (!alertId && Date.now() < deadline) {
+    const response = await page.request.get(origin + "/api/v1/projects/" + project + "/alerts");
+    assert.equal(response.status(), 200);
+    alertId = (await response.json()).entries.find(row => row.source_id === payload.source_id)?.id;
+    if (!alertId) await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  assert.ok(alertId, "The worker must produce the browser source's alert");
+  await page.getByRole("button", { name: "Alerts for Smoke API" }).click();
+  await page.getByRole("button", { name: "Inspect alert " + alertId, exact: true }).click();
   const evidence = page.getByRole("article",{name:"Alert evidence"});
   await evidence.getByRole("button",{name:/^[a-f0-9-]{36}$/}).first().click();
   await evidence.getByText(/HTTP 401/).waitFor();

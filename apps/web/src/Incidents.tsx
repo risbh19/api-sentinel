@@ -66,7 +66,7 @@ function NewIncident({
       ...body,
       request_key: key.current.key,
     });
-    if (created) open(created.id);
+    if (created && created !== "uncertain") open(created.id);
   }
   return (
     <form onSubmit={submit}>
@@ -94,9 +94,63 @@ function NewIncident({
   );
 }
 
+type PendingNote = { version: number; text: string };
+
+function ConfirmNote({
+  access,
+  path,
+  pending,
+  finish,
+  retry,
+}: {
+  access: Access;
+  path: string;
+  pending: PendingNote;
+  finish: (saved: boolean) => void;
+  retry: () => void;
+}) {
+  const check = useProjectRead<Detail>(
+    path + "?after_version=" + pending.version + "&limit=1",
+    access.onExpiry,
+  );
+  return (
+    <ReadState read={check}>
+      {(detail) => {
+        if (!detail.timeline) return <p>Investigator access is required to check this note.</p>;
+        const next = detail.timeline[0];
+        if (!next)
+          return (
+            <>
+              <p>The note has not appeared in the timeline.</p>
+              <button onClick={retry}>Retry original note submission</button>
+            </>
+          );
+        const saved =
+          next.version === pending.version + 1 &&
+          next.action === "note_added" &&
+          next.actor_id === access.user &&
+          next.note === pending.text.trim();
+        return (
+          <>
+            <p role="status">
+              {saved
+                ? "The timeline confirms your note was saved."
+                : "Another change used that incident version. Your draft is available."}
+            </p>
+            <button onClick={() => finish(saved)}>
+              {saved ? "Write another note" : "Return to draft"}
+            </button>
+          </>
+        );
+      }}
+    </ReadState>
+  );
+}
+
 function Investigation({ access, id, back }: { access: Access; id: string; back: () => void }) {
   const [after, setAfter] = useState(0);
   const [note, setNote] = useState("");
+  const [pending, setPending] = useState<PendingNote | null>(null);
   const [target, setTarget] = useState("");
   const [alert, setAlert] = useState("");
   const [notice, setNotice] = useState("");
@@ -106,8 +160,13 @@ function Investigation({ access, id, back }: { access: Access; id: string; back:
   async function change(method: string, suffix: string, body: object, version: number) {
     setNotice("");
     const updated = await save.write(path + suffix, method, { ...body, version });
-    if (updated) {
-      if (suffix === "/notes") setNote("");
+    if (updated === "uncertain" && suffix === "/notes") {
+      setPending({ version, text: note });
+    } else if (updated && updated !== "uncertain") {
+      if (suffix === "/notes") {
+        setNote("");
+        setPending(null);
+      }
       if (suffix.startsWith("/alerts/")) setAlert("");
       setAfter(0);
       setNotice("Incident updated.");
@@ -228,24 +287,41 @@ function Investigation({ access, id, back }: { access: Access; id: string; back:
                 {i.next_version != null && (
                   <button onClick={() => setAfter(i.next_version!)}>Next timeline page</button>
                 )}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void change("POST", "/notes", { text: note }, i.version);
-                  }}
-                >
-                  <label>
-                    Investigation note
-                    <textarea
-                      required
-                      disabled={save.busy}
-                      maxLength={2000}
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                    />
-                  </label>
-                  <button disabled={save.busy || !note.trim()}>Add note</button>
-                </form>
+                {pending ? (
+                  <ConfirmNote
+                    access={access}
+                    path={path}
+                    pending={pending}
+                    retry={() => {
+                      if (!save.busy)
+                        void change("POST", "/notes", { text: pending.text }, pending.version);
+                    }}
+                    finish={(saved) => {
+                      if (saved) setNote("");
+                      setPending(null);
+                      read.reload();
+                    }}
+                  />
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void change("POST", "/notes", { text: note }, i.version);
+                    }}
+                  >
+                    <label>
+                      Investigation note
+                      <textarea
+                        required
+                        disabled={save.busy}
+                        maxLength={2000}
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                      />
+                    </label>
+                    <button disabled={save.busy || !note.trim()}>Add note</button>
+                  </form>
+                )}
               </>
             )}
             <button onClick={read.reload}>Refresh incident</button>
