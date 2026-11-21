@@ -4,18 +4,20 @@ from threading import Barrier
 from typing import Any
 from uuid import UUID, uuid4
 
+import psycopg
 import pytest
 from access_helpers import ORIGIN, add_user, login
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from psycopg import sql
 from sqlalchemy import Engine, event, text
 from sqlalchemy.engine import Connection
 from test_detection_rules import drain, project, sample, send
 from test_events import make_project
 
 from api_sentinel.detections.rules import AUTH_DENIALS, AUTH_FAILURES, REQUEST_VOLUME
-from api_sentinel.identity.operator import prepare
+from api_sentinel.identity.operator import grant_table_access
 from api_sentinel.identity.security import Role
 from api_sentinel.main import create_app
 from api_sentinel.worker import claim, process
@@ -181,22 +183,25 @@ def test_rule_dimensions_severity_and_counts(database: Engine) -> None:
         ]
 
 
-def test_app_role_can_delete_project_with_alerts(
-    database: Engine, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("SENTINEL_APP_PASSWORD", "synthetic-test-app-password".ljust(32, "-"))
-    monkeypatch.setenv("SENTINEL_WORKER_PASSWORD", "synthetic-test-worker-password".ljust(32, "-"))
-    prepare()
+def test_app_role_can_delete_project_with_alerts(database: Engine) -> None:
     owner = project(database)
     send(database, owner, [sample(AUTH_FAILURES, str(i), datetime.now(UTC)) for i in range(8)])
     drain(database)
-    with database.begin() as conn:
-        assert conn.scalar(text("SELECT count(*) FROM alert_evidence")) == 8
-        conn.execute(text("SET LOCAL ROLE sentinel_app"))
-        conn.execute(text("DELETE FROM projects WHERE id=:id"), {"id": owner})
-        conn.execute(text("RESET ROLE"))
+    # Exercise the production grants only in the disposable DB. PostgreSQL roles
+    # are cluster-wide; never change existing login credentials during a test.
+    with psycopg.connect() as conn, conn.transaction(force_rollback=True):
+        for role in ("sentinel_app", "sentinel_worker"):
+            if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone():
+                conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
+        grant_table_access(conn)
+        assert conn.execute("SELECT count(*) FROM alert_evidence").fetchone() == (8,)
+        conn.execute("SET LOCAL ROLE sentinel_app")
+        conn.execute("DELETE FROM projects WHERE id=%s", (owner,))
+        conn.execute("RESET ROLE")
         for table in ("alerts", "alert_evidence", "rule_findings"):
-            assert conn.scalar(text(f"SELECT count(*) FROM {table}")) == 0
+            assert conn.execute(
+                sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
+            ).fetchone() == (0,)
 
 
 def test_detail_keeps_one_snapshot_during_retention(database: Engine) -> None:
