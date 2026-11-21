@@ -33,5 +33,8 @@ deduplication and the event explorer.
 [Alert correlation](https://github.com/risbh19/api-sentinel/pull/13) merged at
 `584beb1` with correlated findings and paginated evidence.
 
-The incident API supports manual investigations, alert promotion, assignment,
-notes and resolution history. Investigation screens follow in the dashboard slice.
+[Incident workflows](https://github.com/risbh19/api-sentinel/pull/14) merged at
+`221071b` with alert promotion, assignment, notes and resolution history.
+
+The project dashboard reads scoped event totals, open alerts and active incidents.
+Investigators can follow alert evidence and manage incidents through the web workspace.

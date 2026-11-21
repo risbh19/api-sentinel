@@ -4,6 +4,7 @@ import { api } from "./api";
 const labels: Record<string, string> = {
   "key.created": "Ingestion key created",
   "key.revoked": "Ingestion key revoked",
+  "incident.changed": "Incident updated",
   "inventory.imported": "Inventory imported",
   "project.created": "Project created",
   "project.deleted": "Project deleted",

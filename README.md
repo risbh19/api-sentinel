@@ -296,7 +296,7 @@ service state only. The records schema stores organization and project names,
 project slugs, UUIDs and creation timestamps. The identity schema also stores account email, password hash, active status, roles,
 session digests and expiry, and bounded login counters. No public registration or
 password recovery is available in this slice. Security event storage and queries
-are available. The worker groups versioned findings into project alerts. The [alert API](docs/detection-rules.md#project-alerts) exposes their thresholds and supporting events. The [incident API](docs/incident-workflows.md) supports triage and keeps an investigator timeline.
+are available. The worker groups versioned findings into project alerts. The [alert API](docs/detection-rules.md#project-alerts) exposes their thresholds and supporting events. The [incident API](docs/incident-workflows.md) supports triage and keeps an investigator timeline. In the project workspace, Overview shows events by occurrence time for the last 24 hours or 7 days in six equal UTC intervals. Open alerts and unresolved incidents are current totals. Use Alerts to inspect evidence or promote an alert, and Incidents to assign, update, and resolve investigations.
 
 [Runtime decision](docs/decisions/0001-local-runtime.md) ·
 [Implementation status](docs/implementation-status.md) · [License](LICENSE)
