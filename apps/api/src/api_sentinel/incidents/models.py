@@ -4,6 +4,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
+from api_sentinel.detections.models import Alert
 from api_sentinel.organizations.models import Base
 
 
@@ -30,15 +31,21 @@ class Incident(Base):
     status: Mapped[str] = mapped_column(sa.String(16))
     version: Mapped[int]
     assignee_id: Mapped[UUID | None] = mapped_column(sa.ForeignKey("users.id"))
-    opened_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
+    opened_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now()
+    )
     resolved_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
 
 class IncidentAlert(Base):
     __tablename__ = "incident_alerts"
     __table_args__ = (
-        sa.ForeignKeyConstraint(["project_id", "incident_id"], ["incidents.project_id", "incidents.id"]),
-        sa.ForeignKeyConstraint(["project_id", "alert_id"], ["alerts.project_id", "alerts.id"]),
+        sa.ForeignKeyConstraint(
+            ["project_id", "incident_id"], ["incidents.project_id", "incidents.id"]
+        ),
+        sa.ForeignKeyConstraint(
+            ["project_id", "alert_id"], [Alert.__table__.c.project_id, Alert.__table__.c.id]
+        ),
         sa.UniqueConstraint("alert_id", name="uq_incident_alert"),
     )
     project_id: Mapped[UUID]
@@ -55,4 +62,6 @@ class IncidentActivity(Base):
     old_value: Mapped[str | None] = mapped_column(sa.String(36))
     new_value: Mapped[str | None] = mapped_column(sa.String(36))
     note: Mapped[str | None] = mapped_column(sa.String(2000))
-    occurred_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
+    occurred_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now()
+    )

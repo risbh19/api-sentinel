@@ -347,9 +347,12 @@ def remove_project(
     org_id: UUID, project_id: UUID, request: Request, user: Principal, db: DB
 ) -> None:
     authorize(db, user, org_id, Permission.DELETE_PROJECT)
-    has_incident = db.scalar(select(Incident.id).join(Project).where(
-        Project.organization_id == org_id, Incident.project_id == project_id
-    ).limit(1))
+    has_incident = db.scalar(
+        select(Incident.id)
+        .join(Project)
+        .where(Project.organization_id == org_id, Incident.project_id == project_id)
+        .limit(1)
+    )
     if has_incident is not None:
         raise HTTPException(409, "Project retains incident history")
     if not OrganizationRecords(db, org_id).delete_project(project_id):
@@ -368,9 +371,12 @@ def remove_project(
 def preserve_assignee(db: Session, org_id: UUID, target: UUID, role: Role | None) -> None:
     if role in (Role.OWNER, Role.ANALYST):
         return
-    assigned = db.scalar(select(Incident.id).join(Project).where(
-        Project.organization_id == org_id, Incident.assignee_id == target
-    ).limit(1))
+    assigned = db.scalar(
+        select(Incident.id)
+        .join(Project)
+        .where(Project.organization_id == org_id, Incident.assignee_id == target)
+        .limit(1)
+    )
     if assigned is not None:
         raise HTTPException(409, "Reassign or unassign the investigator's incidents first")
 

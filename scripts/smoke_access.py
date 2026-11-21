@@ -44,15 +44,34 @@ def check_detection(project: UUID, emitter_env: dict[str, str], request, csrf: s
             event_id = alert["evidence"][0]
             assert request(f"/projects/{project}/events/{event_id}")["id"] == event_id
             incidents = f"/projects/{project}/incidents"
-            created = request(incidents, method="POST", csrf=csrf, expected=201,
-                              payload={"title": "Synthetic login investigation", "alert_id": alert["id"]})
+            created = request(
+                incidents,
+                method="POST",
+                csrf=csrf,
+                expected=201,
+                payload={"title": "Synthetic login investigation", "alert_id": alert["id"]},
+            )
             incident_path = incidents + "/" + created["id"]
-            updated = request(incident_path, method="PATCH", csrf=csrf,
-                              payload={"version": created["version"], "status": "acknowledged"})
-            request(incident_path + "/notes", method="POST", csrf=csrf, expected=201,
-                    payload={"version": updated["version"], "text": "Reviewed synthetic evidence"})
+            updated = request(
+                incident_path,
+                method="PATCH",
+                csrf=csrf,
+                payload={"version": created["version"], "status": "acknowledged"},
+            )
+            request(
+                incident_path + "/notes",
+                method="POST",
+                csrf=csrf,
+                expected=201,
+                payload={"version": updated["version"], "text": "Reviewed synthetic evidence"},
+            )
             timeline = request(incident_path)["timeline"]
-            assert [item["action"] for item in timeline] == ["opened", "alert_linked", "status_changed", "note_added"]
+            assert [item["action"] for item in timeline] == [
+                "opened",
+                "alert_linked",
+                "status_changed",
+                "note_added",
+            ]
             assert timeline[1]["new_value"] == alert["id"]
             print("Incident promotion, acknowledgement and note verified through nginx.")
             print(
