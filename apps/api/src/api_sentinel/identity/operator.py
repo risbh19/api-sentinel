@@ -55,6 +55,10 @@ def prepare() -> None:
             "event_type, actor_hash, client_hash, method, route_template) ON security_events TO sentinel_worker"
         )
         conn.execute("GRANT SELECT, INSERT, UPDATE (evidence) ON rule_findings TO sentinel_worker")
+        conn.execute("GRANT SELECT, INSERT ON alerts TO sentinel_worker")
+        conn.execute("GRANT SELECT, INSERT, DELETE ON alert_evidence TO sentinel_worker")
+        conn.execute("GRANT SELECT (id) ON alerts TO sentinel_app")
+        conn.execute("GRANT SELECT ON alert_summaries, alert_evidence TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")
         conn.execute("GRANT SELECT, INSERT, UPDATE ON ingestion_state TO sentinel_app")

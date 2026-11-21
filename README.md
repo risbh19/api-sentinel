@@ -225,7 +225,9 @@ docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0008_detection_rules`. When upgrading from 0007, stop
+The current revision is `0009_alert_correlation`. Upgrading from 0008 groups
+existing findings immediately. Downgrading to 0008 removes alert IDs and evidence
+links and preserves findings and events. Reapplying creates new alert IDs. When upgrading from 0007, stop
 the existing worker before migration, then rebuild and start the Compose stack.
 Completed jobs are queued again for evaluation. Downgrading to 0007 removes
 findings and keeps source events and jobs.
@@ -294,8 +296,7 @@ service state only. The records schema stores organization and project names,
 project slugs, UUIDs and creation timestamps. The identity schema also stores account email, password hash, active status, roles,
 session digests and expiry, and bounded login counters. No public registration or
 password recovery is available in this slice. Security event storage and queries
-are available. The worker records rule findings. Alert correlation and incident
-management are planned.
+are available. The worker groups versioned findings into project alerts. The [alert API](docs/detection-rules.md#project-alerts) exposes their thresholds and supporting events. Incident management is planned.
 
 [Runtime decision](docs/decisions/0001-local-runtime.md) ·
 [Implementation status](docs/implementation-status.md) · [License](LICENSE)

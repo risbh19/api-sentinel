@@ -16,7 +16,7 @@ pseudonym key starts a new group. Emitters should send one observation per
 request. Each timestamp boundary is inclusive. Within one source, external event
 ID orders ties. A match retains the most recent threshold-sized set ending at the
 matching event, including that event. Overlapping windows can produce several
-findings. Alert correlation and severity assignment are a later step.
+findings. Each finding belongs to one project alert.
 
 Late arrivals update affected evidence even when the original jobs have already
 completed. With a threshold of N, the worker reads at most N−1 earlier and N
@@ -43,3 +43,41 @@ succeeded jobs so retained observations are evaluated under version 1. Pending,
 leased and dead jobs keep their existing state. Start the rebuilt stack to apply
 the worker grants. A downgrade drops findings and the rule indexes. Source
 events remain available for a subsequent rebuild.
+
+
+## Project alerts
+
+The worker groups findings with the same project, source, rule version and
+rule-specific dimensions from the table above. Each alert covers a fixed UTC
+bucket as long as the rule window, aligned to the Unix epoch. The ending
+event selects the bucket. Two matches on opposite sides of a bucket boundary
+produce two alerts, even when they share supporting events.
+
+`occurrence_count` counts distinct matching findings. `first_seen` and
+`last_seen` are occurrence times of their earliest and latest ending events.
+The evidence list is the union of surviving events in those findings. Late
+arrivals can replace supporting events. Re-evaluation preserves the alert ID,
+count and distinct evidence for the same inputs. Deleting a supporting event
+removes its evidence link. An alert with no surviving findings drops out of
+the API. The project owns its alert records until project deletion.
+
+The initial status is `open`. Authentication and authorization patterns receive
+medium severity, request volume receives low severity. These synthetic priorities
+help with triage. Confirm the context with the emitter before drawing conclusions
+about compromise.
+
+- `GET /api/v1/projects/{project_id}/alerts` lists summaries, newest bucket
+  first. Filter by `status` and pass `next_cursor` as `after` for the next page.
+- `GET /api/v1/projects/{project_id}/alerts/{alert_id}` returns the explanation,
+  benign interpretation and internal event UUIDs. For additional evidence pass
+  `next_evidence_cursor` as `after`. Each UUID resolves through the project event
+  detail endpoint. Both endpoints accept a page size of 1 to 100 with `limit`.
+  Pagination reads current data and may change as findings arrive or expire.
+- Viewers can read summaries. Owners, analysts and developers can also read
+  evidence under their existing event-detail permission. Only a signed-in
+  project member can query alerts.
+
+Revision 0009 groups existing findings during migration. Allow time for this
+transaction on larger databases. Rebuild the services and run the migration
+service to apply app and worker grants. Downgrading removes correlations and
+preserves original findings. Reapplying rebuilds the groups with new alert IDs.
