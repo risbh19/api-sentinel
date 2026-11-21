@@ -22,40 +22,29 @@ from uuid import UUID, uuid4
 from check_emitter import RejectRedirect, check
 
 
-def check_detection(project: UUID, emitter_env: dict[str, str]) -> None:
+def check_detection(project: UUID, emitter_env: dict[str, str], request) -> None:
     # The emitter already submitted and replayed one observation for this fresh project.
     for _ in range(7):
         subprocess.run([sys.executable, "scripts/emit_event.py"], env=emitter_env, check=True)
-    query = f"""
-        SELECT f.rule_key, f.version, f.threshold, f.window_seconds, cardinality(f.evidence)
-        FROM rule_findings f JOIN security_events e ON e.id=f.event_id
-        WHERE e.project_id='{project}' AND e.source_id='synthetic-local-demo'
-    """
+    path = f"/projects/{project}/alerts"
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        result = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "exec",
-                "-T",
-                "db",
-                "psql",
-                "-XAt",
-                "-U",
-                "postgres",
-                "-d",
-                "sentinel",
-                "-c",
-                query,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        if result.stdout.strip() == "authentication_failures|1|8|300|8":
+        entries = request(path)["entries"]
+        if entries:
+            assert len(entries) == 1
+            alert = request(path + "/" + entries[0]["id"])
+            assert (
+                alert["rule_key"],
+                alert["version"],
+                alert["threshold"],
+                alert["window_seconds"],
+            ) == ("authentication_failures", 1, 8, 300)
+            assert alert["status"] == "open" and alert["occurrence_count"] == 1
+            assert len(set(alert["evidence"])) == 8 and alert["next_evidence_cursor"] is None
+            event_id = alert["evidence"][0]
+            assert request(f"/projects/{project}/events/{event_id}")["id"] == event_id
             print(
-                "Packaged worker recorded the expected versioned finding with eight observations."
+                "Packaged worker and web API returned one alert with eight distinct observations."
             )
             return
         time.sleep(0.5)
@@ -163,7 +152,7 @@ def main() -> None:
     assert detail["external_event_id"] == event_id and detail["actor_hash"]
     assert "actor_token" not in detail
     if args.rules:
-        check_detection(UUID(project["id"]), emitter_env)
+        check_detection(UUID(project["id"]), emitter_env, request)
     rotated = request(
         keys + "/" + made["key"]["id"] + "/rotate",
         method="POST",

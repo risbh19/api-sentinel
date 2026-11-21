@@ -27,5 +27,8 @@ deduplication and the event explorer.
 [Event processing](https://github.com/risbh19/api-sentinel/pull/11) merged at
 `db84972` with a durable job per event, worker recovery and aggregate queue status.
 
-The detection-rules branch evaluates three rolling thresholds and retains their
-versioned evidence. Alert correlation is the next slice.
+[Detection rules](https://github.com/risbh19/api-sentinel/pull/12) merged at
+`a269dca` with three rolling thresholds and versioned findings.
+
+The alert API groups matching findings and exposes their supporting events.
+The next slice adds incident investigation workflows.

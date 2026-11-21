@@ -20,6 +20,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from api_sentinel.audit.routes import router as audit_router
 from api_sentinel.database import open_engine
+from api_sentinel.detections.routes import router as alert_router
 from api_sentinel.health import database_ready
 from api_sentinel.identity.body_limit import AccessBodyLimit
 from api_sentinel.identity.routes import router
@@ -55,6 +56,7 @@ def create_app(
     app.include_router(inventory_router)
     app.include_router(key_router)
     app.include_router(event_router)
+    app.include_router(alert_router)
     app.add_middleware(AccessBodyLimit)
 
     @app.exception_handler(RequestValidationError)

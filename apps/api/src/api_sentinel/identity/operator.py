@@ -45,35 +45,43 @@ def prepare() -> None:
                     sql.Identifier(conn.info.dbname), role
                 )
             )
-        conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app, sentinel_worker")
-        conn.execute("GRANT INSERT (event_id) ON event_jobs TO sentinel_app")
-        conn.execute(
-            "GRANT SELECT, UPDATE (state, attempts, available_at, last_error_code, delivery_delay_ms) ON event_jobs TO sentinel_worker"
-        )
-        conn.execute(
-            "GRANT SELECT (id, project_id, source_id, external_event_id, occurred_at, received_at, "
-            "event_type, actor_hash, client_hash, method, route_template) ON security_events TO sentinel_worker"
-        )
-        conn.execute("GRANT SELECT, INSERT, UPDATE (evidence) ON rule_findings TO sentinel_worker")
-        conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
-        conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")
-        conn.execute("GRANT SELECT, INSERT, UPDATE ON ingestion_state TO sentinel_app")
-        conn.execute(
-            "GRANT SELECT, INSERT (project_id, label, prefix, key_hash, last_used_at, revoked_at), "
-            "UPDATE (revoked_at, last_used_at) ON ingestion_keys TO sentinel_app"
-        )
-        conn.execute("GRANT SELECT ON audit_entries TO sentinel_app")
-        conn.execute(
-            "GRANT INSERT (action, organization_id, project_id, actor_id, key_id, subject_user_id, "
-            "old_role, new_role, request_id) ON audit_entries TO sentinel_app"
-        )
-        conn.execute("GRANT SELECT ON users, organizations TO sentinel_app")
-        conn.execute("GRANT UPDATE (name) ON organizations TO sentinel_app")
-        conn.execute("GRANT SELECT, INSERT, DELETE ON web_sessions TO sentinel_app")
-        conn.execute("GRANT SELECT, INSERT, UPDATE ON login_windows TO sentinel_app")
-        conn.execute(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON projects, organization_memberships TO sentinel_app"
-        )
+        grant_table_access(conn)
+
+
+def grant_table_access(conn: psycopg.Connection[tuple[object, ...]]) -> None:
+    conn.execute("GRANT USAGE ON SCHEMA public TO sentinel_app, sentinel_worker")
+    conn.execute("GRANT INSERT (event_id) ON event_jobs TO sentinel_app")
+    conn.execute(
+        "GRANT SELECT, UPDATE (state, attempts, available_at, last_error_code, delivery_delay_ms) ON event_jobs TO sentinel_worker"
+    )
+    conn.execute(
+        "GRANT SELECT (id, project_id, source_id, external_event_id, occurred_at, received_at, "
+        "event_type, actor_hash, client_hash, method, route_template) ON security_events TO sentinel_worker"
+    )
+    conn.execute("GRANT SELECT, INSERT, UPDATE (evidence) ON rule_findings TO sentinel_worker")
+    conn.execute("GRANT SELECT, INSERT ON alerts TO sentinel_worker")
+    conn.execute("GRANT SELECT, INSERT, DELETE ON alert_evidence TO sentinel_worker")
+    conn.execute("GRANT SELECT (id) ON alerts TO sentinel_app")
+    conn.execute("GRANT SELECT ON alert_summaries, alert_evidence TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT, UPDATE ON ingestion_state TO sentinel_app")
+    conn.execute(
+        "GRANT SELECT, INSERT (project_id, label, prefix, key_hash, last_used_at, revoked_at), "
+        "UPDATE (revoked_at, last_used_at) ON ingestion_keys TO sentinel_app"
+    )
+    conn.execute("GRANT SELECT ON audit_entries TO sentinel_app")
+    conn.execute(
+        "GRANT INSERT (action, organization_id, project_id, actor_id, key_id, subject_user_id, "
+        "old_role, new_role, request_id) ON audit_entries TO sentinel_app"
+    )
+    conn.execute("GRANT SELECT ON users, organizations TO sentinel_app")
+    conn.execute("GRANT UPDATE (name) ON organizations TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT, DELETE ON web_sessions TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT, UPDATE ON login_windows TO sentinel_app")
+    conn.execute(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON projects, organization_memberships TO sentinel_app"
+    )
 
 
 def provision(
