@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from api_sentinel.audit.records import Action, record
 from api_sentinel.database import transaction
+from api_sentinel.incidents.models import Incident
 from api_sentinel.organizations.models import Organization, Project
 from api_sentinel.organizations.records import OrganizationRecords
 
@@ -345,6 +346,11 @@ def remove_project(
     org_id: UUID, project_id: UUID, request: Request, user: Principal, db: DB
 ) -> None:
     authorize(db, user, org_id, Permission.DELETE_PROJECT)
+    has_incident = db.scalar(select(Incident.id).join(Project).where(
+        Project.organization_id == org_id, Incident.project_id == project_id
+    ).limit(1))
+    if has_incident is not None:
+        raise HTTPException(409, "Project retains incident history")
     if not OrganizationRecords(db, org_id).delete_project(project_id):
         raise HTTPException(404, "Project not found")
 
@@ -356,6 +362,16 @@ def remove_project(
         actor_id=user.id,
         request_id=request.state.request_id,
     )
+
+
+def preserve_assignee(db: Session, org_id: UUID, target: UUID, role: Role | None) -> None:
+    if role in (Role.OWNER, Role.ANALYST):
+        return
+    assigned = db.scalar(select(Incident.id).join(Project).where(
+        Project.organization_id == org_id, Incident.assignee_id == target
+    ).limit(1))
+    if assigned is not None:
+        raise HTTPException(409, "Reassign or unassign the investigator's incidents first")
 
 
 def preserve_owner(db: Session, org_id: UUID, target: UUID, new_role: Role | None) -> None:
@@ -387,6 +403,7 @@ def set_member(
     previous_role = Role(current.role) if current else None
     if previous_role == body.role:
         return
+    preserve_assignee(db, org_id, target, body.role)
     preserve_owner(db, org_id, target, body.role)
     db.execute(
         insert(Membership)
@@ -412,6 +429,7 @@ def set_member(
 @router.delete("/organizations/{org_id}/members/{target}", status_code=204)
 def remove_member(org_id: UUID, target: UUID, request: Request, user: Principal, db: DB) -> None:
     authorize(db, user, org_id, Permission.MANAGE_MEMBERS)
+    preserve_assignee(db, org_id, target, None)
     preserve_owner(db, org_id, target, None)
     old_role = db.scalar(
         delete(Membership)

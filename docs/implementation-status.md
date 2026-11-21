@@ -30,5 +30,8 @@ deduplication and the event explorer.
 [Detection rules](https://github.com/risbh19/api-sentinel/pull/12) merged at
 `a269dca` with three rolling thresholds and versioned findings.
 
-The alert API groups matching findings and exposes their supporting events.
-The next slice adds incident investigation workflows.
+[Alert correlation](https://github.com/risbh19/api-sentinel/pull/13) merged at
+`584beb1` with correlated findings and paginated evidence.
+
+The incident API supports manual investigations, alert promotion, assignment,
+notes and resolution history. Investigation screens follow in the dashboard slice.

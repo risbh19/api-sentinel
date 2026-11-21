@@ -34,6 +34,7 @@ class RuleFinding(Base):
 class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (
+        sa.UniqueConstraint("project_id", "id", name="uq_alert_project_id"),
         sa.CheckConstraint("severity IN ('medium','low')", name="ck_alert_severity"),
         sa.CheckConstraint("status IN ('open','acknowledged','resolved')", name="ck_alert_status"),
         sa.Index("ix_alert_project_bucket", "project_id", "bucket_start", "id"),

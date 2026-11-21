@@ -62,6 +62,8 @@ def grant_table_access(conn: psycopg.Connection[tuple[object, ...]]) -> None:
     conn.execute("GRANT SELECT, INSERT ON alerts TO sentinel_worker")
     conn.execute("GRANT SELECT, INSERT, DELETE ON alert_evidence TO sentinel_worker")
     conn.execute("GRANT SELECT (id) ON alerts TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT, UPDATE (status, assignee_id, resolved_at, version) ON incidents TO sentinel_app")
+    conn.execute("GRANT SELECT, INSERT ON incident_activity, incident_alerts TO sentinel_app")
     conn.execute("GRANT SELECT ON alert_summaries, alert_evidence TO sentinel_app")
     conn.execute("GRANT SELECT, INSERT ON api_imports, api_endpoints TO sentinel_app")
     conn.execute("GRANT SELECT, INSERT ON event_sources, security_events TO sentinel_app")

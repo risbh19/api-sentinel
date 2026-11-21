@@ -22,7 +22,7 @@ from uuid import UUID, uuid4
 from check_emitter import RejectRedirect, check
 
 
-def check_detection(project: UUID, emitter_env: dict[str, str], request) -> None:
+def check_detection(project: UUID, emitter_env: dict[str, str], request, csrf: str) -> None:
     # The emitter already submitted and replayed one observation for this fresh project.
     for _ in range(7):
         subprocess.run([sys.executable, "scripts/emit_event.py"], env=emitter_env, check=True)
@@ -43,6 +43,18 @@ def check_detection(project: UUID, emitter_env: dict[str, str], request) -> None
             assert len(set(alert["evidence"])) == 8 and alert["next_evidence_cursor"] is None
             event_id = alert["evidence"][0]
             assert request(f"/projects/{project}/events/{event_id}")["id"] == event_id
+            incidents = f"/projects/{project}/incidents"
+            created = request(incidents, method="POST", csrf=csrf, expected=201,
+                              payload={"title": "Synthetic login investigation", "alert_id": alert["id"]})
+            incident_path = incidents + "/" + created["id"]
+            updated = request(incident_path, method="PATCH", csrf=csrf,
+                              payload={"version": created["version"], "status": "acknowledged"})
+            request(incident_path + "/notes", method="POST", csrf=csrf, expected=201,
+                    payload={"version": updated["version"], "text": "Reviewed synthetic evidence"})
+            timeline = request(incident_path)["timeline"]
+            assert [item["action"] for item in timeline] == ["opened", "alert_linked", "status_changed", "note_added"]
+            assert timeline[1]["new_value"] == alert["id"]
+            print("Incident promotion, acknowledgement and note verified through nginx.")
             print(
                 "Packaged worker and web API returned one alert with eight distinct observations."
             )
@@ -152,7 +164,7 @@ def main() -> None:
     assert detail["external_event_id"] == event_id and detail["actor_hash"]
     assert "actor_token" not in detail
     if args.rules:
-        check_detection(UUID(project["id"]), emitter_env, request)
+        check_detection(UUID(project["id"]), emitter_env, request, account["csrf_token"])
     rotated = request(
         keys + "/" + made["key"]["id"] + "/rotate",
         method="POST",
