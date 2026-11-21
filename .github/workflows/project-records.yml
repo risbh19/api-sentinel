@@ -34,9 +34,24 @@ jobs:
       - name: Run PostgreSQL integration tests
         run: docker compose run --rm --build record-tests
 
+      - name: Check API types and unit tests
+        run: |
+          docker compose run --rm -v "$PWD:/checkout:ro" -w /checkout/apps/api \
+            -e PYTHONPATH=/checkout/apps/api/src record-tests sh -ec '
+              ruff check --no-cache src tests migrations integration ../../scripts
+              mypy --cache-dir=/tmp/mypy
+              pytest -q -p no:cacheprovider tests'
+
       - name: Check sign-in through the web proxy
         run: |
           docker compose up --build --wait
           python3 scripts/smoke.py
           npm ci --prefix apps/web --no-audit --no-fund
           CHROME_BIN="$(command -v google-chrome)" python3 scripts/smoke_access.py --browser --rules
+
+      - name: Check Python formatting
+        if: ${{ !cancelled() }}
+        run: |
+          docker compose run --rm -v "$PWD:/checkout:ro" -w /checkout/apps/api \
+            -e PYTHONPATH=/checkout/apps/api/src record-tests \
+            ruff format --config pyproject.toml --no-cache --diff src tests migrations integration ../../scripts

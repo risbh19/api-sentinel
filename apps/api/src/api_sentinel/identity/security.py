@@ -28,6 +28,7 @@ class Role(StrEnum):
 
 
 class Permission(StrEnum):
+    INVESTIGATE = "investigate_incidents"
     READ = "read"
     IMPORT = "import_inventory"
     READ_INVENTORY = "read_inventory"
@@ -61,6 +62,7 @@ GRANTS = {
             Permission.READ_KEYS,
             Permission.READ_EVENTS,
             Permission.READ_EVENT_DETAILS,
+            Permission.INVESTIGATE,
             Permission.READ_AUDIT,
             Permission.READ_INVENTORY,
             Permission.IMPORT,

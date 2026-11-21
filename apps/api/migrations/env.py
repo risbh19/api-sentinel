@@ -5,6 +5,7 @@ from api_sentinel.audit import records as audit_records  # noqa: F401
 from api_sentinel.database import open_engine
 from api_sentinel.detections import models as detection_models  # noqa: F401
 from api_sentinel.identity import models as identity_models  # noqa: F401
+from api_sentinel.incidents import models as incident_models  # noqa: F401
 from api_sentinel.ingestion import models as ingestion_models  # noqa: F401
 from api_sentinel.inventory import models as inventory_models  # noqa: F401
 from api_sentinel.organizations.models import Base

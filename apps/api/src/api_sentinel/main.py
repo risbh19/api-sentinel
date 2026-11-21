@@ -25,6 +25,7 @@ from api_sentinel.health import database_ready
 from api_sentinel.identity.body_limit import AccessBodyLimit
 from api_sentinel.identity.routes import router
 from api_sentinel.identity.security import web_origin
+from api_sentinel.incidents.routes import router as incident_router
 from api_sentinel.ingestion.event_routes import router as event_router
 from api_sentinel.ingestion.routes import router as key_router
 from api_sentinel.inventory.routes import router as inventory_router
@@ -57,6 +58,7 @@ def create_app(
     app.include_router(key_router)
     app.include_router(event_router)
     app.include_router(alert_router)
+    app.include_router(incident_router)
     app.add_middleware(AccessBodyLimit)
 
     @app.exception_handler(RequestValidationError)
