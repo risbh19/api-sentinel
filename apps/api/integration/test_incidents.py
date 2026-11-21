@@ -100,7 +100,7 @@ def test_alert_promotion_is_atomic_and_project_scoped(database: Engine) -> None:
         send(database, project, [sample(AUTH_FAILURES, str(i), datetime.now(UTC)) for i in range(8)])
     drain(database)
     with database.connect() as conn:
-        alerts = dict(conn.execute(text("SELECT project_id,id FROM alert_summaries")).tuples().all())
+        alerts: dict[UUID, UUID] = dict(conn.execute(text("SELECT project_id,id FROM alert_summaries")).tuples().all())
     path = f"/api/v1/projects/{first}/incidents"
     with TestClient(create_app(engine=database), base_url=ORIGIN) as client:
         headers = login(client, owner)
