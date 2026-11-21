@@ -28,7 +28,11 @@ def test_manual_investigation_timeline_and_retention(database: Engine, config: C
     with TestClient(create_app(engine=database), base_url=ORIGIN) as client:
         headers = login(client, email)
         assert client.post(path, json={"title": "Triage"}).status_code == 403
-        made = client.post(path, headers=headers, json={"title": "Triage", "priority": "high"})
+        payload = {"title": "Triage", "priority": "high", "request_key": str(uuid4())}
+        made = client.post(path, headers=headers, json=payload)
+        replay = client.post(path, headers=headers, json=payload)
+        assert replay.status_code == 200 and replay.json() == made.json()
+        assert client.post(path, headers=headers, json={**payload, "title": "Changed"}).status_code == 409
         assert made.status_code == 201
         url = path + "/" + made.json()["id"]
         version = made.json()["version"]
@@ -53,6 +57,11 @@ def test_manual_investigation_timeline_and_retention(database: Engine, config: C
         assert tail[-1]["note"] == "Synthetic investigation"
         assert [row["version"] for row in page["timeline"] + tail] == list(range(1, version+2))
         assert all(row["actor_id"] == str(actor) for row in tail)
+        facts = client.get(f"/api/v1/organizations/{org}/audit?project_id={project}").json()["entries"]
+        changes = [entry for entry in facts if entry["action"] == "incident.changed"]
+        assert sorted(entry["incident_version"] for entry in changes) == list(range(1, version+2))
+        assert all(entry["incident_id"] == made.json()["id"] and entry["request_id"] for entry in changes)
+        assert "Synthetic investigation" not in str(changes)
         assert client.delete(f"/api/v1/organizations/{org}/projects/{project}", headers=headers).status_code == 409
     with pytest.raises(RuntimeError, match="discard incident history"):
         command.downgrade(config, "0009_alert_correlation")

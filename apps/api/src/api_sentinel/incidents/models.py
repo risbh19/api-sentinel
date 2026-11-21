@@ -11,6 +11,7 @@ class Incident(Base):
     __tablename__ = "incidents"
     __table_args__ = (
         sa.UniqueConstraint("project_id", "id", name="uq_incident_project_id"),
+        sa.UniqueConstraint("project_id", "creator_id", "request_key", name="uq_incident_request"),
         sa.CheckConstraint(
             "status IN ('open','acknowledged','investigating','resolved','reopened')",
             name="ck_incident_status",
@@ -21,6 +22,9 @@ class Incident(Base):
     )
     id: Mapped[UUID] = mapped_column(primary_key=True)
     project_id: Mapped[UUID] = mapped_column(sa.ForeignKey("projects.id"))
+    creator_id: Mapped[UUID] = mapped_column(sa.ForeignKey("users.id"))
+    request_key: Mapped[UUID | None]
+    creation_digest: Mapped[str] = mapped_column(sa.String(64))
     title: Mapped[str] = mapped_column(sa.String(120))
     priority: Mapped[str] = mapped_column(sa.String(8))
     status: Mapped[str] = mapped_column(sa.String(16))

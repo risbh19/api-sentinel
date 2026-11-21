@@ -9,12 +9,30 @@ branch_labels = None
 depends_on = None
 
 
+PREVIOUS_ACTIONS = (
+    "'account.created', 'session.login', 'session.login_failed', 'session.replaced', "
+    "'session.logout', 'project.created', 'project.deleted', 'member.added', "
+    "'member.role_changed', 'member.removed', 'inventory.imported', 'key.created', 'key.revoked'"
+)
+
+
+def audit_actions(allowed: str) -> None:
+    op.drop_constraint("ck_audit_action", "audit_entries", type_="check")
+    op.create_check_constraint("ck_audit_action", "audit_entries", f"action IN ({allowed})")
+
+
 def upgrade() -> None:
+    audit_actions(PREVIOUS_ACTIONS + ", 'incident.changed'")
+    op.add_column("audit_entries", sa.Column("incident_id", sa.Uuid()))
+    op.add_column("audit_entries", sa.Column("incident_version", sa.Integer()))
     op.create_unique_constraint("uq_alert_project_id", "alerts", ["project_id", "id"])
     op.create_table(
         "incidents",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("project_id", sa.Uuid(), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("creator_id", sa.Uuid(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("request_key", sa.Uuid()),
+        sa.Column("creation_digest", sa.String(64), nullable=False),
         sa.Column("title", sa.String(120), nullable=False),
         sa.Column("priority", sa.String(8), nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
@@ -22,6 +40,7 @@ def upgrade() -> None:
         sa.Column("assignee_id", sa.Uuid(), sa.ForeignKey("users.id")),
         sa.Column("opened_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("resolved_at", sa.DateTime(timezone=True)),
+        sa.UniqueConstraint("project_id", "creator_id", "request_key", name="uq_incident_request"),
         sa.UniqueConstraint("project_id", "id", name="uq_incident_project_id"),
         sa.CheckConstraint("status IN ('open','acknowledged','investigating','resolved','reopened')", name="ck_incident_status"),
         sa.CheckConstraint("priority IN ('low','medium','high')", name="ck_incident_priority"),
@@ -49,11 +68,18 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
 
+    op.execute("""CREATE TRIGGER incident_history_append_only
+                  BEFORE UPDATE OR DELETE OR TRUNCATE ON incident_activity
+                  FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_rewrite()""")
+
 
 def downgrade() -> None:
     op.execute("LOCK TABLE incidents IN ACCESS EXCLUSIVE MODE")
     if op.get_bind().scalar(sa.text("SELECT EXISTS (SELECT 1 FROM incidents)")):
         raise RuntimeError("Downgrade would discard incident history")
+    audit_actions(PREVIOUS_ACTIONS)
+    op.drop_column("audit_entries", "incident_version")
+    op.drop_column("audit_entries", "incident_id")
     op.drop_table("incident_activity")
     op.drop_table("incident_alerts")
     op.drop_table("incidents")

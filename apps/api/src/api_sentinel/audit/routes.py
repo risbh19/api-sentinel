@@ -24,6 +24,8 @@ class Entry(BaseModel):
     organization_id: UUID | None
     project_id: UUID | None
     actor_id: UUID | None
+    incident_id: UUID | None
+    incident_version: int | None
     key_id: UUID | None
     subject_user_id: UUID | None
     old_role: Role | None

@@ -36,9 +36,9 @@ jobs:
 
       - name: Check API types and unit tests
         run: |
-          docker compose run --rm -v "$PWD/apps/api/tests:/app/tests:ro" \
-            -v "$PWD/scripts:/checks:ro" record-tests sh -ec '
-              ruff check --no-cache src tests migrations integration /checks
+          docker compose run --rm -v "$PWD:/checkout:ro" -w /checkout/apps/api \
+            -e PYTHONPATH=/checkout/apps/api/src record-tests sh -ec '
+              ruff check --no-cache src tests migrations integration ../../scripts
               mypy --cache-dir=/tmp/mypy
               pytest -q -p no:cacheprovider tests'
 
@@ -50,7 +50,8 @@ jobs:
           CHROME_BIN="$(command -v google-chrome)" python3 scripts/smoke_access.py --browser --rules
 
       - name: Check Python formatting
+        if: ${{ !cancelled() }}
         run: |
-          docker compose run --rm -v "$PWD/apps/api/tests:/app/tests:ro" \
-            -v "$PWD/scripts:/checks:ro" record-tests \
-            ruff format --config pyproject.toml --no-cache --diff src tests migrations integration /checks
+          docker compose run --rm -v "$PWD:/checkout:ro" -w /checkout/apps/api \
+            -e PYTHONPATH=/checkout/apps/api/src record-tests \
+            ruff format --config pyproject.toml --no-cache --diff src tests migrations integration ../../scripts

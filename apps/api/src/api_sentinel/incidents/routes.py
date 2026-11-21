@@ -1,12 +1,14 @@
+import hashlib
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from api_sentinel.audit.records import Action, record
 from api_sentinel.identity.models import Membership, User
 from api_sentinel.identity.routes import DB, Principal, project_scope
 from api_sentinel.identity.security import GRANTS, Permission, Role
@@ -32,6 +34,7 @@ class Input(BaseModel):
 
 
 class Create(Input):
+    request_key: UUID | None = None
     title: str = Field(min_length=1, max_length=120)
     priority: Priority = "medium"
     alert_id: UUID | None = None
@@ -104,6 +107,10 @@ def activity(
     note: str | None = None,
 ) -> None:
     incident.version += 1
+    record(db, Action.INCIDENT_CHANGED,
+           organization_id=db.scalar(select(Project.organization_id).where(Project.id == incident.project_id)),
+           project_id=incident.project_id, actor_id=actor, incident_id=incident.id,
+           incident_version=incident.version, request_id=db.info.get("request_id"))
     db.add(IncidentActivity(
         incident_id=incident.id, version=incident.version, actor_id=actor,
         action=action, old_value=old, new_value=new, note=note,
@@ -138,9 +145,18 @@ def link(db: Session, incident: Incident, alert_id: UUID, actor: UUID) -> None:
 
 
 @router.post("", status_code=201)
-def create(project_id: UUID, body: Create, user: Principal, db: DB) -> Summary:
+def create(project_id: UUID, body: Create, response: Response, user: Principal, db: DB) -> Summary:
     project_scope(db, user, project_id, Permission.INVESTIGATE)
-    incident = Incident(id=uuid4(), project_id=project_id, title=body.title, priority=body.priority,
+    digest = hashlib.sha256(body.model_dump_json(exclude={"request_key"}).encode()).hexdigest()
+    if body.request_key is not None:
+        previous = db.scalar(select(Incident).where(Incident.project_id == project_id,
+                             Incident.creator_id == user.id, Incident.request_key == body.request_key))
+        if previous is not None:
+            if previous.creation_digest != digest:
+                raise HTTPException(409, "Creation key already used with different inputs")
+            response.status_code = 200
+            return Summary.model_validate(previous)
+    incident = Incident(creator_id=user.id, request_key=body.request_key, creation_digest=digest, id=uuid4(), project_id=project_id, title=body.title, priority=body.priority,
                         status="open", version=0)
     db.add(incident)
     db.flush()

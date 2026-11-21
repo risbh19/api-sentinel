@@ -24,6 +24,13 @@ resolution. Reassign before removing an assigned investigator or changing their
 role to viewer or developer. Only active owners and analysts in the organization
 can be assigned.
 
+For retry-safe creation, send the same optional UUID `request_key` with the same
+payload. Its scope is the project and signed-in creator. The first request returns
+201, a matching replay returns 200 with the current summary, and conflicting
+reuse returns 409. Each timeline change also appears in the organization audit
+feed with the incident ID, version and request ID. Note text stays in the
+investigator timeline.
+
 An invalid transition, a stale version or a duplicate alert link returns 409.
 Refresh detail before retrying. Status, assignment, linked alert, note and actor
 are recorded in the same transaction as the change. Timeline entries have no API

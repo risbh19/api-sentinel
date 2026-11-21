@@ -100,6 +100,7 @@ def engine_for(request: Request) -> Engine:
 
 def session_for(request: Request) -> Iterator[Session]:
     with transaction(engine_for(request)) as session:
+        session.info["request_id"] = request.state.request_id
         yield session
 
 
