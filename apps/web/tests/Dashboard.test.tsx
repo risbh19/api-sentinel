@@ -70,6 +70,7 @@ it("keeps alert evidence hidden for a viewer", async () => {
   );
   render(<Alerts access={{ ...access, role: "viewer" }} promote={() => {}} />);
   await screen.findByText("authentication failures");
+  expect(screen.queryByRole("combobox", { name: "Alert status" })).toBeNull();
   expect(screen.queryByRole("button", { name: /Inspect alert/ })).toBeNull();
 });
 

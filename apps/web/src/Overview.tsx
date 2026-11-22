@@ -36,6 +36,7 @@ export function Overview({ access }: { access: Access }) {
               <div><dt>Currently open alerts</dt><dd>{data.open_alerts}</dd></div>
               <div><dt>Currently active incidents</dt><dd>{data.active_incidents}</dd></div>
             </dl>
+            <p>Resolving an incident leaves its linked alerts open.</p>
             <h3>Event volume</h3>
             <p>
               {utc(data.since)} – {utc(data.until)} UTC · by occurrence time

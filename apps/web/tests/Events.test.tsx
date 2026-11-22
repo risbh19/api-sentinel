@@ -43,3 +43,35 @@ it("applies filters without mutating the loaded snapshot and handles expiry", as
   await vi.waitFor(() => expect(expired).toHaveBeenCalledOnce());
   expect(request.mock.calls[1][0]).toContain("source=synthetic-api");
 });
+
+it("advances a rolling refresh and preserves an applied custom range", async () => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 0, 5, 12));
+  try {
+    const request = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ entries: [], next_cursor: null })));
+    vi.stubGlobal("fetch", request);
+    render(<Events project="demo" detailed={false} onExpiry={vi.fn()} />);
+    const refresh = () => screen.findByRole("button", { name: "Refresh events" });
+    await refresh();
+    fireEvent.change(screen.getByLabelText("Event source"), {target:{value:"gateway"}});
+    fireEvent.click(screen.getByText("Apply event filters"));
+    await refresh();
+    clock.mockReturnValue(Date.UTC(2026, 0, 5, 15));
+    fireEvent.click(await refresh());
+    await refresh();
+    const latest = () => new URL(request.mock.calls.at(-1)![0], "http://localhost").searchParams;
+    expect(latest().get("until")).toBe(new Date(Date.now() + 60000).toISOString());
+    expect(latest().get("source")).toBe("gateway");
+    const customEnd = (screen.getByLabelText("From (local time)") as HTMLInputElement).value;
+    fireEvent.change(screen.getByLabelText("Until (local time)"), { target: { value: customEnd } });
+    fireEvent.click(screen.getByText("Apply event filters"));
+    await refresh();
+    expect(latest().get("until")).toBe(new Date(customEnd).toISOString());
+    const custom = latest().toString();
+    clock.mockReturnValue(Date.UTC(2026, 0, 6, 15));
+    fireEvent.click(await refresh());
+    await refresh();
+    expect(latest().toString()).toBe(custom);
+  } finally {
+    clock.mockRestore();
+  }
+});
