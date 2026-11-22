@@ -22,8 +22,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      - name: Create local test credentials
-        run: python3 scripts/init_env.py
+      - name: Start the documented stack from a fresh checkout
+        run: |
+          python3 scripts/init_env.py
+          docker compose up --build --wait
+          python3 scripts/smoke.py
+
+      - name: Check frontend components in the pinned build image
+        run: |
+          docker build --target build --tag sentinel-web-check ./apps/web
+          docker run --rm --network none sentinel-web-check sh -ec 'npm run lint && npm test'
 
       - name: Apply and verify migrations
         run: |
@@ -44,8 +52,6 @@ jobs:
 
       - name: Verify incident workflows and tenant permissions in Chrome
         run: |
-          docker compose up --build --wait
-          python3 scripts/smoke.py
           npm ci --prefix apps/web --no-audit --no-fund
           node --test apps/web/tests/check-browser-requests.mjs
           CHROME_BIN="$(command -v google-chrome)" python3 scripts/smoke_access.py --browser --rules
@@ -64,8 +70,7 @@ jobs:
           docker compose up -d --wait db
           python3 scripts/smoke.py
           python3 scripts/smoke_access.py --rules
-          docker compose restart worker
-          python3 scripts/smoke_access.py --rules
+          python3 scripts/smoke_access.py --rules --restart-worker
           docker compose exec -T worker python -m api_sentinel.worker --status
 
       - name: Check Python formatting

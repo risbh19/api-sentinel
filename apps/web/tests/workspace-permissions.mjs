@@ -1,7 +1,7 @@
 import { fillTestPassword, requestLocalApi } from "./browser-requests.mjs";
 import assert from "node:assert/strict";
 
-export async function checkViewerAccess(browser, ownerPage, origin, project, account) {
+export async function checkViewerAccess(browser, ownerPage, origin, project, account, eventId, incidentId) {
   const context = await browser.newContext({ serviceWorkers: "block" });
   try {
     await context.route("**/*", route =>
@@ -27,7 +27,10 @@ export async function checkViewerAccess(browser, ownerPage, origin, project, acc
     assert.equal(session.status(), 200);
     const headers = { Origin: origin, "X-CSRF-Token": (await session.json()).csrf_token };
     const membership = api + "/organizations/" + org + "/members/" + member;
-    assert.equal((await requestLocalApi(context.request, "GET", detail)).status(), 404);
+    for (const url of [detail, detail + "/events/" + eventId, detail + "/incidents/" + incidentId]) {
+      assert.equal((await requestLocalApi(admin, "GET", url)).status(), 200);
+      assert.equal((await requestLocalApi(context.request, "GET", url)).status(), 404);
+    }
 
     assert.equal((await requestLocalApi(admin, "PUT", membership, { headers, data: { role: "viewer" } })).status(), 204);
     await page.reload();

@@ -1,22 +1,23 @@
 # API Sentinel
 
-A local-first API security monitoring application in development. The workspace supports sign-in, project access, OpenAPI inventory, ingestion keys and persisted security events from PostgreSQL.
-The service status page reports FastAPI and database readiness. Open the web
-page to check the connection again after stopping or restarting the database.
+API Sentinel turns telemetry from an instrumented API into a project-scoped investigation. Import a contract, send observations with an ingestion key, and follow a worker-generated alert to its supporting events and incident timeline. A finding describes a pattern in the reported traffic. Its evidence and possible benign explanations are available in the workspace.
 
-To follow a synthetic observation from ingestion through alert evidence and incident resolution, use the [local security demo](docs/local-demo.md).
+For a first investigation, follow the [synthetic local demo](docs/local-demo.md) on its own Compose project. For a regular workspace, use the steps below. The [architecture](docs/architecture.md), [threat model](docs/threat-model.md) and [v0.1 release checklist](docs/release-readiness.md) describe the supported configuration and verification status.
 
 ## Start locally
 
-Install Docker with Compose v2.20+ and Python 3.10+ for the helper scripts.
-From the repository root, run these commands in PowerShell, Bash or zsh.
+Use Git, Docker with Compose v2.20+ and Python 3.11+ for the full verification walkthrough. On Windows, start Docker Desktop in Linux container mode. From PowerShell, Bash or zsh, clone the repository and start the stack:
 
 ```sh
+git clone https://github.com/risbh19/api-sentinel.git
+cd api-sentinel
 python scripts/init_env.py
 docker compose up --build --wait
 docker compose ps
 python scripts/smoke.py
 ```
+
+On Windows, use `py -3.11` in place of `python` if that is how the interpreter is installed. The first build needs network access for the pinned dependencies and base images. The running demo uses local services.
 
 Open [Service status](http://127.0.0.1:8080). The API is available on port
 8000. Only the web and API ports are published, both on loopback. Set
@@ -224,12 +225,12 @@ use the same commands as a new installation.
 
 ```sh
 docker compose run --rm --build migrate
-docker compose run --rm migrate alembic current
+docker compose run --rm migrate alembic current --check-heads
 docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0010_incident_workflows`. Downgrading to 0009 refuses to discard incident history. Upgrading from 0008 groups
+The current revision is `0011_event_retention`. Its downgrade removes the receipt-time index. Downgrading to 0009 refuses to discard incident history. Upgrading from 0008 groups
 existing findings immediately. Downgrading to 0008 removes alert IDs and evidence
 links and preserves findings and events. Reapplying creates new alert IDs. When upgrading from 0007, stop
 the existing worker before migration, then rebuild and start the Compose stack.

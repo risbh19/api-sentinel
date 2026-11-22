@@ -87,8 +87,11 @@ try {
   await page.getByRole("button", { name: "Inspect alert " + alertId, exact: true }).click();
   const evidence = page.getByRole("article",{name:"Alert evidence"});
   const linkedEvents = evidence.getByRole("button", {name:/^[a-f0-9-]{36}$/});
+  await evidence.getByText(/Rule version 1/).waitFor();
+  await evidence.getByText(/at least 8 observations in 300 seconds/).waitFor();
   await linkedEvents.first().waitFor();
   assert.equal(await linkedEvents.count(), 8);
+  const eventId = (await linkedEvents.first().textContent()).trim();
   await linkedEvents.first().click();
   await evidence.getByText(/HTTP 401/).waitFor();
   await checkAccessibility("Alert evidence");
@@ -96,6 +99,7 @@ try {
   await page.getByLabel("Incident title").fill("Browser login investigation");
   await page.getByRole("button",{name:"Create incident",exact:true}).click();
   await page.getByRole("heading",{name:"Browser login investigation"}).waitFor();
+  const incidentId = (await page.locator("article.investigation > p > code").textContent()).trim();
   await page.getByRole("button",{name:"Assign to me"}).click();
   await page.getByText("Assigned to you",{exact:true}).waitFor();
   await page.getByRole("button",{name:"Move to acknowledged"}).click();
@@ -105,7 +109,9 @@ try {
   await page.getByText("Verified the synthetic browser observations.",{exact:true}).waitFor();
   await page.getByRole("button",{name:"Move to investigating"}).click();
   await page.getByRole("button",{name:"Move to resolved"}).click();
-  await page.getByRole("button",{name:"Move to reopened"}).waitFor();
+  await page.getByRole("button",{name:"Move to reopened"}).click();
+  await page.getByText("reopened", {exact:true}).first().waitFor();
+  await page.getByRole("button",{name:"Move to investigating"}).waitFor();
   await page.setViewportSize({width:390,height:844});
   const mobileLayout = await page.evaluate(() => ({
     viewport: window.innerWidth,
@@ -117,7 +123,7 @@ try {
   assert.ok(mobileLayout.pageWidth <= mobileLayout.viewport, JSON.stringify(mobileLayout));
   await checkAccessibility("Mobile incident detail");
   await page.setViewportSize({width:1280,height:800});
-  console.log("Browser verified alert evidence, incident promotion, assignment, note and resolution. Three accessibility scans passed.");
+  console.log("Browser verified alert evidence, incident promotion, assignment, note, resolution and reopening. Three accessibility scans passed.");
   await page.getByRole("button", { name: "Integrations for Synthetic login demo" }).click();
   await page.getByRole("button", { name: "Rotate", exact: true }).click();
   await page.getByRole("button", { name: "Confirm rotate" }).click();
@@ -137,7 +143,7 @@ try {
     .getByText("Project created", { exact: true });
   if (!(await creation.count())) await page.getByRole("button", {name:"Older activity"}).click();
   await creation.waitFor();
-  await checkViewerAccess(browser, page, origin, project, viewer);
+  await checkViewerAccess(browser, page, origin, project, viewer, eventId, incidentId);
   await page.reload();
   await page.getByText(email, { exact: true }).waitFor();
   await page.getByRole("button", { name: "Sign out" }).click();
