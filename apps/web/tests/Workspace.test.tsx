@@ -10,6 +10,7 @@ it("signs in, switches organization, and signs out with the session's CSRF token
     .mockResolvedValueOnce(Response.json({ email: "owner@example.test", csrf_token: "session-test",
       organizations: [{ id: "alpha", name: "Alpha", role: "owner" }, { id: "beta", name: "Beta", role: "viewer" }] }))
     .mockResolvedValueOnce(Response.json([{ id: "p", name: "Primary API", slug: "primary" }]))
+    .mockResolvedValueOnce(Response.json({ since: "2026-11-01T00:00:00Z", until: "2026-11-02T00:00:00Z", events:0, open_alerts:0, active_incidents:0, buckets:[] }))
     .mockResolvedValueOnce(Response.json([]))
     .mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", request);

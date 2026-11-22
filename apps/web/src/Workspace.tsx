@@ -1,3 +1,6 @@
+import { Alerts } from "./Alerts";
+import { Overview } from "./Overview";
+import { Incidents } from "./Incidents";
 import { Integrations } from "./Integrations";
 import { Inventory } from "./Inventory";
 import { Events } from "./Events";
@@ -6,13 +9,13 @@ import { api } from "./api";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Org = { id: string; name: string; role: string };
-type Account = { email: string; organizations: Org[]; csrf_token: string };
+type Account = { id: string; email: string; organizations: Org[]; csrf_token: string };
 type Project = { id: string; name: string; slug: string };
 
-function Projects({ org, token, onExpiry }: { org: Org; token: string; onExpiry: () => void }) {
+function Projects({ org, token, user, onExpiry }: { org: Org; token: string; user: string; onExpiry: () => void }) {
   const [selected, setSelected] = useState("");
-  const [integration, setIntegration] = useState("");
-  const [events, setEvents] = useState("");
+  const [tab, setTab] = useState("Overview");
+  const [fromAlert, setFromAlert] = useState("");
   const [items, setItems] = useState<Project[]>([]);
   const [cursor, setCursor] = useState("");
   const [more, setMore] = useState(false);
@@ -42,15 +45,25 @@ function Projects({ org, token, onExpiry }: { org: Org; token: string; onExpiry:
     return () => controller.abort();
   }, [org.id, cursor, retry, onExpiry]);
 
-  return <section aria-labelledby="project-list">
+  const project = items.find(p => p.id === selected) ?? items[0];
+  function navigate(view: string) { setFromAlert(""); setTab(view); }
+  const access = project && { project:project.id, role:org.role, token, user, onExpiry };
+  return <section aria-labelledby="project-list" className="project-panel">
     <div className="heading"><h2 id="project-list">Projects</h2><span>{org.role}</span></div>
-    {items.length > 0 && <ul>{items.map((p) => <li key={p.id}>{p.name} <code>{p.slug}</code>{" "}
-      <button aria-label={"Inventory for " + p.name} aria-expanded={p.id === selected} onClick={() => { setEvents(""); setIntegration(""); setSelected(selected === p.id ? "" : p.id); }}>Inventory</button>
-      <button aria-label={"Events for " + p.name} aria-expanded={p.id === events} onClick={() => { setSelected(""); setIntegration(""); setEvents(events === p.id ? "" : p.id); }}>Events</button>
-      {org.role !== "viewer" && <button aria-label={"Integrations for " + p.name} aria-expanded={p.id === integration} onClick={() => { setEvents(""); setSelected(""); setIntegration(integration === p.id ? "" : p.id); }}>Integrations</button>}
-      {p.id === events && <Events key={p.id} project={p.id} detailed={org.role !== "viewer"} onExpiry={onExpiry} />}
-      {p.id === integration && <Integrations key={p.id} project={p.id} writable={org.role === "owner" || org.role === "developer"} csrf={token} onExpiry={onExpiry} />}
-      {p.id === selected && <Inventory key={p.id} project={p.id} writable={["owner", "analyst", "developer"].includes(org.role)} token={token} onExpiry={onExpiry} />}</li>)}</ul>}
+    {project && access && <>
+      <label>Project<select value={project.id} onChange={e=>{setSelected(e.target.value);navigate("Overview");}}>
+        {items.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+      <nav aria-label="Project views">{["Overview","Inventory","Events","Alerts","Incidents",...(org.role === "viewer" ? [] : ["Integrations"])].map(view=>
+        <button key={view} aria-label={view+" for "+project.name} aria-current={view===tab ? "page" : undefined} onClick={()=>navigate(view)}>{view}</button>)}</nav>
+      <div key={project.id} className="project-view">
+        {tab === "Overview" && <Overview access={access}/>}
+        {tab === "Alerts" && <Alerts access={access} promote={id=>{setFromAlert(id);setTab("Incidents");}}/>}
+        {tab === "Incidents" && <Incidents access={access} fromAlert={fromAlert}/>}
+        {tab === "Events" && <Events project={project.id} detailed={org.role !== "viewer"} onExpiry={onExpiry}/>}
+        {tab === "Integrations" && <Integrations project={project.id} writable={org.role === "owner" || org.role === "developer"} csrf={token} onExpiry={onExpiry}/>}
+        {tab === "Inventory" && <Inventory project={project.id} writable={org.role !== "viewer"} token={token} onExpiry={onExpiry}/>}
+      </div>
+    </>}
     {phase === "loading" && <p role="status">Loading projects…</p>}
     {phase === "done" && !items.length && <p>This organization has no projects yet.</p>}
     {phase === "error" && <><p role="alert">Unable to load these projects.</p>
@@ -128,7 +141,7 @@ export function Workspace() {
       {account && <><div className="account"><span>{account.email}</span><button disabled={busy} onClick={signOut}>Sign out</button></div>
         {org ? <><label>Organization<select value={org.id} onChange={(e) => setOrgId(e.target.value)}>
           {account.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-          <Projects key={org.id} org={org} token={account.csrf_token} onExpiry={expire} />
+          <Projects key={org.id} org={org} token={account.csrf_token} user={account.id} onExpiry={expire} />
           {(org.role === "owner" || org.role === "analyst") && <AuditActivity key={"audit-" + org.id} orgId={org.id} onExpiry={expire} />}</> : <p>Ask an organization owner to add your account.</p>}</>}
       {error && <p role="alert">{error}</p>}
     </main></>;
