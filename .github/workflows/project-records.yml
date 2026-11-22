@@ -50,6 +50,24 @@ jobs:
           node --test apps/web/tests/check-browser-requests.mjs
           CHROME_BIN="$(command -v google-chrome)" python3 scripts/smoke_access.py --browser --rules
 
+      - name: Rehearse database restore and outage recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          backup_dir=$(mktemp -d)
+          trap 'rm -f "$backup_dir/sentinel.dump"; rmdir "$backup_dir"' EXIT
+          python3 scripts/database_backup.py create "$backup_dir/sentinel.dump"
+          python3 scripts/database_backup.py verify "$backup_dir/sentinel.dump" | tee "$RUNNER_TEMP/restore-result"
+          python3 -c 'import json, sys; r = json.loads(open(sys.argv[1]).read().splitlines()[-1]); assert min(r[k] for k in ("events", "incidents", "audit_entries")) > 0' "$RUNNER_TEMP/restore-result"
+          docker compose stop db
+          python3 scripts/smoke.py --db-down
+          docker compose up -d --wait db
+          python3 scripts/smoke.py
+          python3 scripts/smoke_access.py --rules
+          docker compose restart worker
+          python3 scripts/smoke_access.py --rules
+          docker compose exec -T worker python -m api_sentinel.worker --status
+
       - name: Check Python formatting
         if: ${{ !cancelled() }}
         run: |

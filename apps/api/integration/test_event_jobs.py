@@ -90,6 +90,7 @@ def test_two_workers_claim_disjoint_bounded_batches(database: Engine) -> None:
 
 def test_crash_after_claim_and_replacement_worker(database: Engine) -> None:
     assert emit(database, project(database), "recover") == 1
+    assert status(database)["due_pending"] == 1
     crash = subprocess.run(
         [
             sys.executable,
@@ -104,7 +105,9 @@ os._exit(17)
         check=False,
     )
     assert crash.returncode == 17 and claim(database) == []
+    assert status(database)["expired_leases"] == 0
     due(database)
+    assert status(database)["expired_leases"] == 1
     [(event_id, attempt)] = claim(database)
     assert attempt == 2 and not process(database, event_id, 1)
     assert process(database, event_id, attempt)

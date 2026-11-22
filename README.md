@@ -34,6 +34,8 @@ PostgreSQL applies the initialization SQL only when creating an empty
 database directory. Editing passwords in .env alone will break the matching
 database login. Use `docker compose down` to stop and retain local data.
 
+See the [operations runbook](docs/operations.md) for scoped event expiry, worker lag, backup and restore rehearsal.
+
 ## Check database recovery
 
 Use this sequence on your local development stack after startup. It

@@ -96,6 +96,8 @@ def status(engine: Engine) -> dict[str, int]:
                    count(*) FILTER (WHERE state='running') AS running,
                    count(*) FILTER (WHERE state='succeeded') AS succeeded,
                    count(*) FILTER (WHERE state='dead') AS dead,
+                   count(*) FILTER (WHERE state='pending' AND available_at <= now()) AS due_pending,
+                   count(*) FILTER (WHERE state='running' AND available_at <= now()) AS expired_leases,
                    coalesce(extract(epoch FROM now() - min(queued_at)
                        FILTER (WHERE state IN ('pending','running')))::bigint, 0) AS oldest_open_seconds
             FROM event_jobs
@@ -136,6 +138,8 @@ def main() -> None:
                 stopped.wait(3)
     finally:
         engine.dispose()
+        if not args.status:
+            print('{"service":"worker","state":"stopped"}', flush=True)
 
 
 if __name__ == "__main__":
