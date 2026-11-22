@@ -9,13 +9,22 @@ function localTime(date: Date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+function defaultWindow() {
+  const now = Date.now();
+  return { since: new Date(now - 24 * 3600000).toISOString(), until: new Date(now + 60000).toISOString() };
+}
+
 export function Events({ project, detailed, onExpiry }: { project: string; detailed: boolean; onExpiry: () => void }) {
-  const [until, setUntil] = useState(() => localTime(new Date(Date.now() + 60000)));
-  const [since, setSince] = useState(() => localTime(new Date(Date.now() - 24 * 3600000)));
+  const [window, setWindow] = useState(defaultWindow);
+  const [draftSince, setSince] = useState<string | null>(null);
+  const [draftUntil, setUntil] = useState<string | null>(null);
+  const since = draftSince ?? localTime(new Date(window.since));
+  const until = draftUntil ?? localTime(new Date(window.until));
+  const [rolling, setRolling] = useState(true);
   const [source, setSource] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
-  const [filters, setFilters] = useState(() => new URLSearchParams({ since: new Date(Date.now() - 24 * 3600000).toISOString(), until: new Date(Date.now() + 60000).toISOString(), limit: "25" }).toString());
+  const [filters, setFilters] = useState(() => new URLSearchParams({ ...window, limit: "25" }).toString());
   const [cursor, setCursor] = useState("");
   const [revision, setRevision] = useState(0);
   const [page, setPage] = useState<Page | null>(null);
@@ -57,13 +66,28 @@ export function Events({ project, detailed, onExpiry }: { project: string; detai
   function load(after = "") {
     setCursor(after); setPage(null); setError(""); setSelected(""); setDetail(null); setDetailError(""); setRevision((v) => v + 1);
   }
+  function refresh() {
+    if (rolling) {
+      const next = defaultWindow();
+      const query = new URLSearchParams(filters);
+      query.set("since", next.since);
+      query.set("until", next.until);
+      setWindow(next);
+      setFilters(query.toString());
+    }
+    load();
+  }
   function apply(event: FormEvent) {
     event.preventDefault();
     const start = new Date(since), end = new Date(until);
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end < start || end.getTime() - start.getTime() > 30 * 86400000) {
       setError("Choose an ordered time range of at most 30 days."); return;
     }
-    const query = new URLSearchParams({ since: start.toISOString(), until: end.toISOString(), limit: "25" });
+    const isRolling = draftSince === null && draftUntil === null;
+    const range = isRolling ? defaultWindow() : { since: start.toISOString(), until: end.toISOString() };
+    setRolling(isRolling);
+    setWindow(range);
+    const query = new URLSearchParams({ ...range, limit: "25" });
     if (source) query.set("source", source);
     if (category) query.set("event_type", category);
     if (status) query.set("status_code", status);
@@ -86,7 +110,7 @@ export function Events({ project, detailed, onExpiry }: { project: string; detai
           <tbody>{page.entries.map((row) => <tr key={row.id}><td><time dateTime={row.occurred_at}>{new Date(row.occurred_at).toISOString()}</time></td><td>{row.source_id}</td><td>{row.event_type}</td><td>{row.method}</td><td><code>{row.route_template}</code></td><td>{row.status_code}</td>{detailed && <td><button aria-label={"View event " + row.id} onClick={() => { setDetail(null); setDetailError(""); setSelected(row.id); setDetailRevision((v) => v + 1); }}>View details</button></td>}</tr>)}</tbody></table></div>}
       {page.next_cursor && <button onClick={() => load(page.next_cursor!)}>Next events</button>}
       {cursor && <button onClick={() => load()}>First events</button>}
-      <button onClick={() => load()}>Refresh events</button>
+      <button onClick={refresh}>Refresh events</button>
     </>}
     {selected && detailed && <section aria-label="Event details"><h4>Event details</h4>
       {detailError ? <p role="alert">{detailError}</p> : detail ? <dl>

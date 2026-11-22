@@ -111,11 +111,9 @@ function Evidence({
 }
 
 export function Alerts({ access, promote }: { access: Access; promote: (id: string) => void }) {
-  const [status, setStatus] = useState("");
   const [after, setAfter] = useState("");
   const [selected, setSelected] = useState("");
   const params = new URLSearchParams({ limit: "20" });
-  if (status) params.set("status", status);
   if (after) params.set("after", after);
   const read = useProjectRead<Page>(
     "/projects/" + access.project + "/alerts?" + params,
@@ -129,26 +127,11 @@ export function Alerts({ access, promote }: { access: Access; promote: (id: stri
     <section aria-label="Project alerts">
       <div className="heading">
         <h2>Alerts</h2>
-        <label>
-          Alert status
-          <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              page("");
-            }}
-          >
-            <option value="">All statuses</option>
-            {["open", "acknowledged", "resolved"].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </label>
       </div>
       <ReadState read={read}>
         {(data) => (
           <>
-            {!data.entries.length && <p>No alerts match this filter.</p>}
+            {!data.entries.length && <p>No alerts in this project.</p>}
             <ul className="records">
               {data.entries.map((a) => (
                 <li key={a.id}>
