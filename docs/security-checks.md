@@ -13,7 +13,7 @@ docker compose run --rm --build record-tests
 docker compose up --build --wait
 ```
 
-The integration runner creates and removes a temporary database for each test. Its assertions cover:
+The integration runner creates and removes a temporary database for each test. The unit and integration suites cover these boundaries:
 
 | Boundary | Evidence |
 | --- | --- |

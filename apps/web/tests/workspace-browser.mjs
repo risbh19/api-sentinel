@@ -1,3 +1,4 @@
+import { fillTestPassword, requestLocalApi } from "./browser-requests.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import axe from "axe-core";
@@ -22,7 +23,7 @@ try {
   await page.goto(origin);
   await page.getByRole("link", { name: "Open your project workspace" }).click();
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await fillTestPassword(page, password);
   await page.getByRole("button", { name: "Sign in" }).click();
   const selector = page.getByRole("combobox", { name: "Project", exact: true });
   await selector.selectOption({ label: "Synthetic login demo" });
@@ -74,7 +75,7 @@ try {
   const deadline = Date.now() + 45000;
   let alertId;
   while (!alertId && Date.now() < deadline) {
-    const response = await page.request.get(origin + "/api/v1/projects/" + project + "/alerts");
+    const response = await requestLocalApi(page.request, "GET", origin + "/api/v1/projects/" + project + "/alerts");
     assert.equal(response.status(), 200);
     const alerts = (await response.json()).entries.filter(row => row.source_id === demoSource);
     assert.ok(alerts.length <= 1);

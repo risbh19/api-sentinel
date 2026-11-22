@@ -47,6 +47,7 @@ jobs:
           docker compose up --build --wait
           python3 scripts/smoke.py
           npm ci --prefix apps/web --no-audit --no-fund
+          node --test apps/web/tests/check-browser-requests.mjs
           CHROME_BIN="$(command -v google-chrome)" python3 scripts/smoke_access.py --browser --rules
 
       - name: Check Python formatting
