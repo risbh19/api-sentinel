@@ -32,11 +32,15 @@ To exercise failure recovery on a disposable stack:
 ```sh
 docker compose stop db
 python scripts/smoke.py --db-down
-docker compose up -d --wait
-docker compose restart worker
+docker compose up -d --wait db
 python scripts/smoke.py
+python scripts/smoke_access.py --rules
+docker compose restart worker
+python scripts/smoke_access.py --rules
 docker compose exec -T worker python -m api_sentinel.worker --status
 ```
+
+Each rules smoke run provisions a new synthetic account and waits for a fresh worker-generated alert. The first exercises reconnection in the existing worker process. The second exercises the restarted worker.
 
 ## Back up, verify and recover
 
