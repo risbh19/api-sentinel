@@ -15,7 +15,7 @@ from api_sentinel.database import transaction
 from api_sentinel.identity.models import Membership
 from api_sentinel.identity.security import Role
 from api_sentinel.ingestion import records
-from api_sentinel.ingestion.models import EventSource, IngestionState, SecurityEvent
+from api_sentinel.ingestion.models import EventJob, EventSource, IngestionState, SecurityEvent
 from api_sentinel.main import create_app
 from api_sentinel.organizations.records import OrganizationRecords
 
@@ -123,7 +123,53 @@ def test_atomic_deduplication_persistence_and_privacy(
         assert auth["Authorization"] not in caplog.text
 
 
-def test_bad_second_event_rolls_back_entire_batch(database: Engine) -> None:
+def test_identical_observations_are_private_to_each_tenant(database: Engine) -> None:
+    first, _, org_a = add_user(database)
+    second, _, org_b = add_user(database)
+    project_a, project_b = make_project(database, org_a), make_project(database, org_b)
+    payload = batch("shared-fixture-id")
+    submit = "/api/v1/ingest/events"
+    app = create_app(engine=database)
+    with TestClient(app, base_url=ORIGIN) as a, TestClient(app, base_url=ORIGIN) as b:
+        details = []
+        for client, email, project in ((a, first, project_a), (b, second, project_b)):
+            headers = login(client, email)
+            credential = emit_headers(client, project, headers)
+            for accepted, duplicate in ((1, 0), (0, 1)):
+                response = client.post(submit, json=payload, headers=credential)
+                assert response.status_code == 200
+                assert response.json() == {
+                    "project_id": str(project),
+                    "accepted": accepted,
+                    "duplicate": duplicate,
+                    "rejected": 0,
+                }
+            url = f"/api/v1/projects/{project}/events"
+            page = client.get(url, params=query()).json()
+            (row,) = page["entries"]
+            detail = client.get(url + "/" + row["id"])
+            assert detail.status_code == 200
+            details.append(detail.json())
+
+        left, right = details
+        assert left["external_event_id"] == right["external_event_id"] == "shared-fixture-id"
+        for field in ("id", "actor_hash", "client_hash"):
+            assert left[field] and right[field] and left[field] != right[field]
+        for client, own_project, foreign_project, foreign_event in (
+            (a, project_a, project_b, right["id"]),
+            (b, project_b, project_a, left["id"]),
+        ):
+            for project in (own_project, foreign_project):
+                assert (
+                    client.get(f"/api/v1/projects/{project}/events/{foreign_event}").status_code
+                    == 404
+                )
+        with transaction(database) as db:
+            assert db.scalar(select(func.count()).select_from(EventJob)) == 2
+
+
+@pytest.mark.parametrize("bad_field", ["occurred_at", "unexpected_metadata"])
+def test_bad_second_event_rolls_back_entire_batch(database: Engine, bad_field: str) -> None:
     email, _, org = add_user(database)
     project = make_project(database, org)
     with TestClient(create_app(engine=database), base_url=ORIGIN) as client:
@@ -131,12 +177,21 @@ def test_bad_second_event_rolls_back_entire_batch(database: Engine) -> None:
         auth = emit_headers(client, project, headers)
         payload = batch("one", "two")
         assert isinstance(payload["events"], list)
-        payload["events"][1]["occurred_at"] = (datetime.now(UTC) - timedelta(days=31)).isoformat()
-        assert client.post("/api/v1/ingest/events", json=payload, headers=auth).status_code == 422
+        marker = "synthetic-private-metadata"
+        payload["events"][1][bad_field] = (
+            (datetime.now(UTC) - timedelta(days=31)).isoformat()
+            if bad_field == "occurred_at"
+            else marker
+        )
+        rejected = client.post("/api/v1/ingest/events", json=payload, headers=auth)
+        assert rejected.status_code == 422 and marker not in rejected.text
         with transaction(database) as db:
             assert db.scalar(select(func.count()).select_from(SecurityEvent)) == 0
             assert db.scalar(select(func.count()).select_from(EventSource)) == 0
             assert db.scalar(select(func.count()).select_from(IngestionState)) == 0
+            assert db.scalar(select(func.count()).select_from(EventJob)) == 0
+        corrected = client.post("/api/v1/ingest/events", json=batch("one", "two"), headers=auth)
+        assert corrected.status_code == 200 and corrected.json()["accepted"] == 2
 
 
 @pytest.mark.parametrize("role", list(Role))

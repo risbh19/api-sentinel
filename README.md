@@ -286,6 +286,8 @@ uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --l
 
 Run dependency checks from apps/api with `uv audit --locked` and from
 apps/web with `npm audit`. Both require access to an advisory service.
+The [security regression guide](docs/security-checks.md) covers tenant isolation,
+browser permissions, offline secret scanning and how to record findings.
 
 ## Data and scope
 

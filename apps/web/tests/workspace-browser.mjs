@@ -1,13 +1,15 @@
+import { fillTestPassword, requestLocalApi } from "./browser-requests.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import axe from "axe-core";
+import { checkViewerAccess } from "./workspace-permissions.mjs";
 import assert from "node:assert/strict";
 import { stdin } from "node:process";
 import { chromium } from "playwright-core";
 
 let input = "";
 for await (const chunk of stdin) input += chunk;
-const { email, password } = JSON.parse(input);
+const { email, password, viewer } = JSON.parse(input);
 const origin = "http://127.0.0.1:8080";
 const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN,
@@ -21,7 +23,7 @@ try {
   await page.goto(origin);
   await page.getByRole("link", { name: "Open your project workspace" }).click();
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await fillTestPassword(page, password);
   await page.getByRole("button", { name: "Sign in" }).click();
   const selector = page.getByRole("combobox", { name: "Project", exact: true });
   await selector.selectOption({ label: "Synthetic login demo" });
@@ -73,7 +75,7 @@ try {
   const deadline = Date.now() + 45000;
   let alertId;
   while (!alertId && Date.now() < deadline) {
-    const response = await page.request.get(origin + "/api/v1/projects/" + project + "/alerts");
+    const response = await requestLocalApi(page.request, "GET", origin + "/api/v1/projects/" + project + "/alerts");
     assert.equal(response.status(), 200);
     const alerts = (await response.json()).entries.filter(row => row.source_id === demoSource);
     assert.ok(alerts.length <= 1);
@@ -135,6 +137,7 @@ try {
     .getByText("Project created", { exact: true });
   if (!(await creation.count())) await page.getByRole("button", {name:"Older activity"}).click();
   await creation.waitFor();
+  await checkViewerAccess(browser, page, origin, project, viewer);
   await page.reload();
   await page.getByText(email, { exact: true }).waitFor();
   await page.getByRole("button", { name: "Sign out" }).click();
