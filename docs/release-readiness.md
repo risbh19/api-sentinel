@@ -24,17 +24,27 @@ The [operations baseline](https://github.com/risbh19/api-sentinel/actions/runs/4
 Use a fresh checkout, a new Compose project name and unused default ports 8000 and 8080. Choose the candidate commit recorded on the PR. The clone command in the README defaults to main. For an open PR, fetch its branch and check out the recorded candidate SHA before initializing the environment. Docker Desktop must be running Linux containers. Install Python 3.11+, the Node version from the README and Google Chrome to include browser coverage. Run from PowerShell in the checkout, stopping on any nonzero exit code:
 
 ```powershell
-git rev-parse HEAD
-docker compose version
+$ErrorActionPreference = "Stop"
+function Invoke-Checked {
+    param([string]$program, [string[]]$arguments)
+    & $program @arguments
+    if ($LASTEXITCODE -ne 0) { throw "$program failed with exit code $LASTEXITCODE" }
+}
+Invoke-Checked git @("rev-parse", "HEAD")
+Invoke-Checked docker @("compose", "version")
 $env:COMPOSE_PROJECT_NAME = "sentinel-check-" + [guid]::NewGuid().ToString("N")
-python scripts/init_env.py
-docker compose up --build --wait
-python scripts/smoke.py
-docker compose run --rm migrate alembic current --check-heads
-npm.cmd ci --prefix apps/web --no-audit --no-fund
 $env:CHROME_BIN = Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"
-python scripts/smoke_access.py --browser --rules --restart-worker
-docker compose down
+if (!(Test-Path -LiteralPath $env:CHROME_BIN)) { throw "Set CHROME_BIN to the installed browser" }
+Invoke-Checked python @("scripts/init_env.py")
+try {
+    Invoke-Checked docker @("compose", "up", "--build", "--wait")
+    Invoke-Checked python @("scripts/smoke.py")
+    Invoke-Checked docker @("compose", "run", "--rm", "migrate", "alembic", "current", "--check-heads")
+    Invoke-Checked npm.cmd @("ci", "--prefix", "apps/web", "--no-audit", "--no-fund")
+    Invoke-Checked python @("scripts/smoke_access.py", "--browser", "--rules", "--restart-worker")
+} finally {
+    Invoke-Checked docker @("compose", "down")
+}
 ```
 
 Set `CHROME_BIN` to the installed browser path if it differs. Save the commit, Windows and Docker versions, each command result and any failure. Keep the generated environment and demo credentials private. The original foundation received a Windows startup and outage check. The full current Windows candidate walkthrough still needs evidence.
@@ -42,5 +52,5 @@ Set `CHROME_BIN` to the installed browser path if it differs. Save the commit, W
 ## Release decision
 
 - A maintainer reviews the exact candidate diff, dependency and secret scans, CI outcome, and unresolved findings. Record environment, SHA and run links. An unexplained critical or high finding blocks release.
-- Keep tagging pending until the reviewed PR is merged, its merge commit is verified on main, and the Windows clean-install run has succeeded. Resolve the threshold-scope discrepancy against the agreed v0.1 requirements before declaring every mandatory item complete.
+- Keep the release-readiness PR open until the Windows candidate run succeeds and the threshold requirement is implemented or its deferral explicitly accepted by the owner. After those gates and review pass, verify the merge commit on main before making a tagging decision.
 - Public ingress, multi-host failover and recovery onto replacement infrastructure fall outside this local release. The next optional work includes controlled fixture authorization tests, rule tuning, redacted exports and a consent-based GitHub integration.

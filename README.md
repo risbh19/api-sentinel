@@ -273,19 +273,20 @@ For frontend development, run the Compose stack with the default API port,
 set `SENTINEL_WEB_ORIGIN=http://127.0.0.1:5173` in .env, then recreate the api service.
 Run `npm ci` and `npm run dev` in apps/web and open that exact origin.
 Restore the Compose web origin when returning to the packaged UI.
-For native API development, set PGHOST, PGPORT and PGDATABASE for a local
-PostgreSQL database. With the administrator PGUSER and PGPASSWORD, set
-SENTINEL_APP_PASSWORD and SENTINEL_WORKER_PASSWORD to distinct generated secrets
-of at least 32 characters each and run
-`uv run --locked python -m api_sentinel.identity.operator prepare`
-from apps/api with PYTHONPATH set to src. If you already ran Compose setup,
-use its provisioned roles and app credential instead. Start the server with
-PGUSER=sentinel_probe, PGPASSWORD set to its probe password, the matching
-SENTINEL_APP_PASSWORD and the web origin for your frontend.
+For native development use a separate local PostgreSQL 16 cluster. Create a database
+named `sentinel` and set `PGHOST`, `PGPORT` and `PGDATABASE=sentinel`.
+Generate the local environment with `scripts/init_env.py`. Compose reads that file
+automatically. Native processes need the corresponding values set in their own environments.
+
+1. In an administrator shell, supply the administrator's `PGUSER` and `PGPASSWORD` plus the generated `SENTINEL_PROBE_PASSWORD`. From the repository root run `psql -X -v ON_ERROR_STOP=1 -f deploy/postgres/10-probe.sql` once on the fresh database. This creates the probe role and restricts schema access.
+2. In that shell set `SENTINEL_APP_PASSWORD` and `SENTINEL_WORKER_PASSWORD` to their distinct generated values. From `apps/api`, with `PYTHONPATH=src`, run `uv run --locked python -m api_sentinel.identity.operator prepare` to apply migrations and runtime grants.
+3. In a separate API shell set `PGUSER=sentinel_probe`, its `PGPASSWORD`, the matching `SENTINEL_APP_PASSWORD`, and `SENTINEL_EVENT_HMAC_KEY` (64 lowercase hex characters). Set `SENTINEL_WEB_ORIGIN` to the exact frontend origin. From `apps/api` run:
 
 ```sh
 uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --loop asyncio:SelectorEventLoop --host 127.0.0.1 --port 8000 --no-access-log --no-server-header --no-proxy-headers
 ```
+
+4. In a worker shell connected to the same database, set `PGUSER=sentinel_worker`, its matching `PGPASSWORD` and `PYTHONPATH=src`. Run `uv run --locked python -m api_sentinel.worker` from `apps/api`. The worker drains queued observations and writes findings.
 
 Run dependency checks from apps/api with `uv audit --locked` and from
 apps/web with `npm audit`. Both require access to an advisory service.
