@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import axe from "axe-core";
 import assert from "node:assert/strict";
@@ -22,8 +23,10 @@ try {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("button", { name: "Overview for Smoke API" }).waitFor();
-  const project = await page.getByRole("combobox", { name: "Project", exact: true }).inputValue();
+  const selector = page.getByRole("combobox", { name: "Project", exact: true });
+  await selector.selectOption({ label: "Synthetic login demo" });
+  await page.getByRole("button", { name: "Overview for Synthetic login demo" }).waitFor();
+  const project = await selector.inputValue();
   async function checkAccessibility(view) {
     await page.evaluate(axe.source);
     const issues = await page.evaluate(async () => {
@@ -35,36 +38,36 @@ try {
   }
   await page.getByRole("button", {name:"Refresh overview"}).waitFor();
   await checkAccessibility("Overview");
-  await page.getByRole("button", { name: "Inventory for Smoke API" }).click();
-  await page.getByLabel(/OpenAPI file/).setInputFiles(fileURLToPath(new URL("../../../examples/petstore.yaml", import.meta.url)));
+  await page.getByRole("button", { name: "Inventory for Synthetic login demo" }).click();
+  await page.getByLabel(/OpenAPI file/).setInputFiles(fileURLToPath(new URL("../../../examples/login-demo.yaml", import.meta.url)));
   await page.getByRole("button", { name: "Import file" }).click();
-  await page.getByText("/pets/{petId}", { exact: true }).waitFor();
-  await page.getByText("localSession", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Integrations for Smoke API" }).click();
+  await page.getByText("/api/login", { exact: true }).waitFor();
+  await page.getByText("demoSession", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Integrations for Synthetic login demo" }).click();
   await page.getByLabel("Emitter name").fill("Browser emitter");
   await page.getByRole("button", { name: "Create key" }).click();
   await page.getByLabel("New ingestion key").waitFor();
   const ingestionKey = await page.getByLabel("New ingestion key").inputValue();
-  const payload = { source_id: "synthetic-browser", events: [{ event_id: "browser-event", occurred_at: new Date().toISOString(), event_type: "authentication_failure", method: "POST", route_template: "/api/login", status_code: 401, actor_token: "synthetic-browser-actor" }] };
-  const submit = () => page.request.post(origin + "/api/v1/ingest/events", { headers: { Authorization: "Bearer " + ingestionKey }, data: payload });
-  const accepted = await submit();
-  assert.equal(accepted.status(), 200);
-  assert.equal((await accepted.json()).accepted, 1);
-  assert.equal((await (await submit()).json()).duplicate, 1);
+  const demoSource = "synthetic-login-demo";
+  const emitter = fileURLToPath(new URL("../../../scripts/emit_event.py", import.meta.url));
+  const runDemo = () => execFileSync(process.env.SMOKE_PYTHON, [emitter, "--demo"], {
+    encoding: "utf8",
+    env: { ...process.env, SENTINEL_INGESTION_KEY: ingestionKey },
+  }).trim().split(/\r?\n/);
+  const replay = "Synthetic events: 0 accepted, 9 duplicate, 0 rejected.";
+  assert.deepEqual(runDemo(), ["Synthetic events: 9 accepted, 0 duplicate, 0 rejected.", replay]);
+  assert.deepEqual(runDemo(), [replay, replay]);
   await page.getByRole("button", { name: "Hide key" }).click();
-  await page.getByRole("button", { name: "Events for Smoke API" }).click();
-  await page.getByLabel("Event source").fill("synthetic-browser");
+  await page.getByRole("button", { name: "Events for Synthetic login demo" }).click();
+  await page.getByLabel("Event source").fill(demoSource);
   await page.getByRole("button", { name: "Apply event filters" }).click();
-  await page.getByRole("region", { name: "Security events", exact: true }).getByText("/api/login", { exact: true }).waitFor();
-  await page.getByRole("button", { name: /^View event / }).click();
-  await page.getByText("browser-event", { exact: true }).waitFor();
-  assert.equal(await page.getByText("synthetic-browser-actor", { exact: true }).count(), 0);
+  const events = page.getByRole("region", { name: "Security events", exact: true });
+  const normal = events.getByRole("row").filter({ hasText: "/api/users/{id}" });
+  await normal.getByRole("button", { name: /^View event / }).click();
+  assert.equal(await events.getByText("/api/login", { exact: true }).count(), 8);
+  await page.getByText("demo-normal", { exact: true }).waitFor();
+  assert.equal(await page.getByText("synthetic-demo-user", { exact: true }).count(), 0);
   await page.getByText("Actor pseudonym", { exact: true }).waitFor();
-  const rest = Array.from({length:7}, (_,i)=>({...payload.events[0],event_id:"browser-peer-"+i}));
-  const batch = await page.request.post(origin + "/api/v1/ingest/events", {
-    headers:{Authorization:"Bearer "+ingestionKey}, data:{source_id:payload.source_id,events:rest}
-  });
-  assert.equal((await batch.json()).accepted,7);
   // The worker runs independently of ingestion. Await each API response before
   // opening the list so the rendered page includes this source's new alert.
   const deadline = Date.now() + 45000;
@@ -72,14 +75,19 @@ try {
   while (!alertId && Date.now() < deadline) {
     const response = await page.request.get(origin + "/api/v1/projects/" + project + "/alerts");
     assert.equal(response.status(), 200);
-    alertId = (await response.json()).entries.find(row => row.source_id === payload.source_id)?.id;
+    const alerts = (await response.json()).entries.filter(row => row.source_id === demoSource);
+    assert.ok(alerts.length <= 1);
+    alertId = alerts[0]?.id;
     if (!alertId) await new Promise(resolve => setTimeout(resolve, 400));
   }
   assert.ok(alertId, "The worker must produce the browser source's alert");
-  await page.getByRole("button", { name: "Alerts for Smoke API" }).click();
+  await page.getByRole("button", { name: "Alerts for Synthetic login demo" }).click();
   await page.getByRole("button", { name: "Inspect alert " + alertId, exact: true }).click();
   const evidence = page.getByRole("article",{name:"Alert evidence"});
-  await evidence.getByRole("button",{name:/^[a-f0-9-]{36}$/}).first().click();
+  const linkedEvents = evidence.getByRole("button", {name:/^[a-f0-9-]{36}$/});
+  await linkedEvents.first().waitFor();
+  assert.equal(await linkedEvents.count(), 8);
+  await linkedEvents.first().click();
   await evidence.getByText(/HTTP 401/).waitFor();
   await checkAccessibility("Alert evidence");
   await evidence.getByRole("button",{name:"Create incident from alert"}).click();
@@ -108,12 +116,13 @@ try {
   await checkAccessibility("Mobile incident detail");
   await page.setViewportSize({width:1280,height:800});
   console.log("Browser verified alert evidence, incident promotion, assignment, note and resolution. Three accessibility scans passed.");
-  await page.getByRole("button", { name: "Integrations for Smoke API" }).click();
+  await page.getByRole("button", { name: "Integrations for Synthetic login demo" }).click();
   await page.getByRole("button", { name: "Rotate", exact: true }).click();
   await page.getByRole("button", { name: "Confirm rotate" }).click();
   await page.getByLabel("New ingestion key").waitFor();
   await page.reload();
-  await page.getByRole("button", { name: "Integrations for Smoke API" }).click();
+  await selector.selectOption({ label: "Synthetic login demo" });
+  await page.getByRole("button", { name: "Integrations for Synthetic login demo" }).click();
   await page.getByRole("button", { name: "Revoke", exact: true }).click();
   assert.equal(await page.getByLabel("New ingestion key").count(), 0);
   await page.getByRole("button", { name: "Confirm revoke" }).click();
@@ -122,8 +131,9 @@ try {
   await page.getByRole("button", { name: "Rotate", exact: true }).waitFor({state:"detached"});
   await page.getByRole("button", { name: "View audit activity" }).click();
   await page.getByText("Inventory imported", { exact: true }).waitFor();
-  const creation = page.getByText("Project created", {exact:true});
-  if (!(await creation.count())) await page.getByRole("button",{name:"Older activity"}).click();
+  const creation = page.getByRole("listitem").filter({ hasText: project })
+    .getByText("Project created", { exact: true });
+  if (!(await creation.count())) await page.getByRole("button", {name:"Older activity"}).click();
   await creation.waitFor();
   await page.reload();
   await page.getByText(email, { exact: true }).waitFor();

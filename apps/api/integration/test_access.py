@@ -7,6 +7,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, update
+from sqlalchemy.exc import IntegrityError
 
 from api_sentinel.database import transaction
 from api_sentinel.identity.models import User, WebSession
@@ -219,3 +220,30 @@ def test_database_text_rejects_control_characters(database: Engine) -> None:
         assert bad.status_code == 422 and "Bad" not in bad.text
     with pytest.raises(ValueError, match="control characters"):
         provision("another@example.test", PASSWORD, "Bad\x00Name")
+
+
+def test_demo_provisions_only_a_new_tenant_and_preserves_existing_accounts(
+    database: Engine,
+) -> None:
+    regular = "regular@example.test"
+    demo = "demo-owner@example.test"
+    provision(regular, PASSWORD, "Ordinary team")
+    with pytest.raises(ValueError):
+        provision(regular, PASSWORD, "Ordinary team", demo=True)
+    provision(demo, PASSWORD, None, demo=True)
+    with pytest.raises(IntegrityError):
+        provision(demo, PASSWORD + "-changed", None, demo=True)
+    with TestClient(create_app(engine=database), base_url=ORIGIN) as client:
+        login(client, demo)
+        orgs = client.get("/api/v1/auth/me").json()["organizations"]
+        assert [(org["name"], org["role"]) for org in orgs] == [("Synthetic demo team", "owner")]
+        base = f"/api/v1/organizations/{orgs[0]['id']}"
+        projects = client.get(base + "/projects").json()
+        assert [p["name"] for p in projects] == ["Synthetic login demo"]
+        project = projects[0]["id"]
+        audit = client.get(base + "/audit", params={"project_id": project}).json()["entries"]
+        assert [(e["action"], e["actor_id"]) for e in audit] == [("project.created", None)]
+        login(client, regular)
+        own = client.get("/api/v1/auth/me").json()["organizations"][0]["id"]
+        assert client.get(f"/api/v1/organizations/{own}/projects").json() == []
+        assert client.get(f"/api/v1/projects/{project}").status_code == 404

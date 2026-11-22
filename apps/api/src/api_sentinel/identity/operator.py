@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from api_sentinel.audit.records import Action, record
 from api_sentinel.database import open_engine, transaction
 from api_sentinel.organizations.models import Organization
-from api_sentinel.organizations.records import create_organization
+from api_sentinel.organizations.records import OrganizationRecords, create_organization
 
 from .models import Membership, User
 from .security import HASHER, Role, display_name, normalized_email
@@ -89,8 +89,17 @@ def grant_table_access(conn: psycopg.Connection[tuple[object, ...]]) -> None:
 
 
 def provision(
-    email: str, password: str, organization: str | None, organization_id: UUID | None = None
+    email: str,
+    password: str,
+    organization: str | None,
+    organization_id: UUID | None = None,
+    *,
+    demo: bool = False,
 ) -> None:
+    if demo:
+        if organization is not None or organization_id is not None:
+            raise ValueError("The demo requires a new, isolated organization")
+        organization = "Synthetic demo team"
     email = normalized_email(email)
     if not 12 <= len(password) <= 256:
         raise ValueError("Password length must be 12 to 256 characters")
@@ -107,6 +116,13 @@ def provision(
             if organization is not None:
                 org = create_organization(db, organization)
                 organization_id = org.id
+                if demo:
+                    project = OrganizationRecords(db, org.id).create_project(
+                        "Synthetic login demo", "synthetic-login"
+                    )
+                    record(
+                        db, Action.PROJECT_CREATED, organization_id=org.id, project_id=project.id
+                    )
             elif organization_id is not None:
                 locked = db.scalar(
                     select(Organization.id)
@@ -145,6 +161,9 @@ def main() -> None:
     user = commands.add_parser("create-user")
     user.add_argument("email")
     group = user.add_mutually_exclusive_group()
+    group.add_argument(
+        "--demo", action="store_true", help="Create an isolated synthetic demo team and project"
+    )
     group.add_argument("--new-organization")
     group.add_argument("--organization-id", type=UUID)
     user.add_argument("--password-stdin", action="store_true")
@@ -158,7 +177,9 @@ def main() -> None:
         else getpass.getpass("New password: ")
     )
     try:
-        provision(args.email, password, args.new_organization, args.organization_id)
+        provision(
+            args.email, password, args.new_organization, args.organization_id, demo=args.demo
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from None
     except IntegrityError:
