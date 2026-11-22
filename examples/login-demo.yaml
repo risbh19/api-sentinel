@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: Synthetic login demo
+  version: "1.0"
+components:
+  securitySchemes:
+    demoSession:
+      type: http
+      scheme: bearer
+paths:
+  /api/login:
+    post:
+      operationId: signIn
+      security: []
+      responses:
+        "401": { description: Synthetic authentication failure }
+  /api/users/{id}:
+    get:
+      operationId: readUser
+      security:
+        - demoSession: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Synthetic user read }

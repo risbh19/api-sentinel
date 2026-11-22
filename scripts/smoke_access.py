@@ -109,8 +109,7 @@ def main() -> None:
             "api_sentinel.identity.operator",
             "create-user",
             email,
-            "--new-organization",
-            "Synthetic smoke team",
+            *(["--demo"] if args.browser else ["--new-organization", "Synthetic smoke team"]),
             "--password-stdin",
         ],
         input=password + "\n",
@@ -151,7 +150,7 @@ def main() -> None:
         expected=201,
         payload={"name": "Smoke API", "slug": "smoke"},
     )
-    assert request(collection)[0]["id"] == project["id"]
+    assert any(row["id"] == project["id"] for row in request(collection))
     audit = request(f"/organizations/{org['id']}/audit?project_id={project['id']}")["entries"]
     assert len(audit) == 1 and audit[0]["actor_id"] == account["id"]
     assert audit[0]["action"] == "project.created" and audit[0]["request_id"]
@@ -206,6 +205,7 @@ def main() -> None:
         subprocess.run(
             ["node", "tests/workspace-browser.mjs"],
             cwd=Path(__file__).resolve().parents[1] / "apps/web",
+            env={**os.environ, "SMOKE_PYTHON": sys.executable},
             input=json.dumps({"email": email, "password": password}),
             text=True,
             check=True,

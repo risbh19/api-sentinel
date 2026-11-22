@@ -4,6 +4,8 @@ A local-first API security monitoring application in development. The workspace 
 The service status page reports FastAPI and database readiness. Open the web
 page to check the connection again after stopping or restarting the database.
 
+To follow a synthetic observation from ingestion through alert evidence and incident resolution, use the [local security demo](docs/local-demo.md).
+
 ## Start locally
 
 Install Docker with Compose v2.20+ and Python 3.10+ for the helper scripts.
