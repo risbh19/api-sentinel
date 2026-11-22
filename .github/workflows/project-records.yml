@@ -42,7 +42,7 @@ jobs:
               mypy --cache-dir=/tmp/mypy
               pytest -q -p no:cacheprovider tests'
 
-      - name: Check sign-in through the web proxy
+      - name: Verify incident workflows and tenant permissions in Chrome
         run: |
           docker compose up --build --wait
           python3 scripts/smoke.py

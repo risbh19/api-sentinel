@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import axe from "axe-core";
+import { checkViewerAccess } from "./workspace-permissions.mjs";
 import assert from "node:assert/strict";
 import { stdin } from "node:process";
 import { chromium } from "playwright-core";
 
 let input = "";
 for await (const chunk of stdin) input += chunk;
-const { email, password } = JSON.parse(input);
+const { email, password, viewer } = JSON.parse(input);
 const origin = "http://127.0.0.1:8080";
 const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN,
@@ -135,6 +136,7 @@ try {
     .getByText("Project created", { exact: true });
   if (!(await creation.count())) await page.getByRole("button", {name:"Older activity"}).click();
   await creation.waitFor();
+  await checkViewerAccess(browser, page, origin, project, viewer);
   await page.reload();
   await page.getByText(email, { exact: true }).waitFor();
   await page.getByRole("button", { name: "Sign out" }).click();

@@ -108,6 +108,27 @@ def test_lifecycle_masking_and_project_bound_machine_auth(
             assert secret not in listing.text + audit.text + caplog.text
 
 
+def test_rotation_requires_the_current_sessions_csrf_token(database: Engine) -> None:
+    email, _, org = add_user(database)
+    base = collection(database, org)
+    app = create_app(engine=database)
+    with TestClient(app, base_url=ORIGIN) as owner, TestClient(app, base_url=ORIGIN) as other:
+        other_email, _, _ = add_user(database)
+        foreign_headers = login(other, other_email)
+        headers = login(owner, email)
+        created = owner.post(base, headers=headers, json={"label": "Fixture key"})
+        assert created.status_code == 201
+        key = created.json()
+        rotate = f"{base}/{key['key']['id']}/rotate"
+        check = base + "/check"
+        bearer = {"Authorization": "Bearer " + key["secret"]}
+        assert owner.post(rotate, headers=foreign_headers).status_code == 403
+        assert other.post(check, headers=bearer).status_code == 204
+        assert len(owner.get(base).json()["entries"]) == 1
+        assert owner.post(rotate, headers=headers).status_code == 201
+        assert other.post(check, headers=bearer).status_code == 401
+
+
 @pytest.mark.parametrize("role", list(Role))
 def test_role_matrix_and_foreign_keys(database: Engine, role: Role) -> None:
     email, _, org = add_user(database, role)

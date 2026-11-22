@@ -1,4 +1,5 @@
 import json
+import socket
 
 import pytest
 
@@ -143,4 +144,23 @@ def test_shared_path_items_charge_an_aggregate_work_budget() -> None:
         "paths": {f"/group/{i}": {"$ref": "#/components/pathItems/shared"} for i in range(125)},
     }
     with pytest.raises(InvalidDocument, match="Expanded inventory exceeds the field limit"):
+        parse(json.dumps(doc).encode(), True)
+
+
+def test_contract_metadata_is_processed_without_network_io(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_network(*args: object, **kwargs: object) -> None:
+        pytest.fail("Contract parsing attempted a network operation")
+
+    monkeypatch.setattr(socket, "getaddrinfo", no_network)
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", no_network)
+    doc = spec()
+    url = "https://contract.invalid/fixture"
+    doc["servers"] = [{"url": url}]
+    assert len(parse(json.dumps(doc).encode(), True).operations) == 2
+    doc["components"] = {"schemas": {"Fixture": {"$ref": url}}}
+    doc["paths"] = {}
+    with pytest.raises(InvalidDocument, match="document-local"):
         parse(json.dumps(doc).encode(), True)

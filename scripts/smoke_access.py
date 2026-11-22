@@ -82,18 +82,7 @@ def check_detection(project: UUID, emitter_env: dict[str, str], request, csrf: s
     raise RuntimeError("The expected authentication finding did not appear within 30 seconds")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--browser",
-        action="store_true",
-        help="Also verify the workspace using local Chrome",
-    )
-    parser.add_argument(
-        "--rules", action="store_true", help="Check a finding from the running worker"
-    )
-    args = parser.parse_args()
-    origin = "http://127.0.0.1:8080"
+def provision_account(*organization_args: str) -> tuple[str, str]:
     email = f"smoke-{uuid4().hex}@example.test"
     password = secrets.token_urlsafe(32)
     subprocess.run(
@@ -109,12 +98,30 @@ def main() -> None:
             "api_sentinel.identity.operator",
             "create-user",
             email,
-            *(["--demo"] if args.browser else ["--new-organization", "Synthetic smoke team"]),
+            *organization_args,
             "--password-stdin",
         ],
         input=password + "\n",
         text=True,
         check=True,
+    )
+    return email, password
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="Also verify the workspace using local Chrome",
+    )
+    parser.add_argument(
+        "--rules", action="store_true", help="Check a finding from the running worker"
+    )
+    args = parser.parse_args()
+    origin = "http://127.0.0.1:8080"
+    email, password = provision_account(
+        *(["--demo"] if args.browser else ["--new-organization", "Synthetic smoke team"])
     )
     client = build_opener(ProxyHandler({}), RejectRedirect(), HTTPCookieProcessor(CookieJar()))
 
@@ -202,11 +209,20 @@ def main() -> None:
     request("/auth/logout", method="POST", csrf=account["csrf_token"], expected=204)
     request("/auth/me", expected=401)
     if args.browser:
+        viewer_email, viewer_password = provision_account(
+            "--new-organization", "Separate smoke team"
+        )
         subprocess.run(
             ["node", "tests/workspace-browser.mjs"],
             cwd=Path(__file__).resolve().parents[1] / "apps/web",
             env={**os.environ, "SMOKE_PYTHON": sys.executable},
-            input=json.dumps({"email": email, "password": password}),
+            input=json.dumps(
+                {
+                    "email": email,
+                    "password": password,
+                    "viewer": {"email": viewer_email, "password": viewer_password},
+                }
+            ),
             text=True,
             check=True,
         )
