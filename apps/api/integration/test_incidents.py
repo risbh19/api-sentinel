@@ -19,6 +19,7 @@ from api_sentinel.identity.models import Membership
 from api_sentinel.identity.security import Role
 from api_sentinel.incidents.models import Incident, IncidentAlert
 from api_sentinel.main import create_app
+from api_sentinel.retention import expire_batch
 
 
 def test_manual_investigation_timeline_and_retention(database: Engine, config: Config) -> None:
@@ -196,6 +197,18 @@ def test_alert_promotion_is_atomic_and_project_scoped(database: Engine) -> None:
             ).status_code
             == 404
         )
+        audit_url = f"/api/v1/organizations/{org}/audit?project_id={first}"
+        history = client.get(audit_url).json()["entries"]
+        with database.begin() as conn:
+            conn.execute(
+                text("UPDATE security_events SET received_at=now()-interval '31 days'"),
+            )
+        assert expire_batch(database, first, 30, 500, apply=True) == 8
+        assert client.get(f"{path}/{incident_id}").json()["timeline"] == timeline
+        assert client.get(audit_url).json()["entries"] == history
+        with database.connect() as conn:
+            assert conn.scalar(text("SELECT count(*) FROM incident_alerts")) == 1
+            assert conn.scalar(text("SELECT count(*) FROM alert_evidence")) == 8
     with pytest.raises(IntegrityError), transaction(database) as db:
         db.add(IncidentAlert(project_id=first, incident_id=incident_id, alert_id=alerts[second]))
 

@@ -69,6 +69,7 @@ class SecurityEvent(Base):
             "(event_type <> 'authorization_denial' OR status_code = 403)",
             name="ck_event_failure_status",
         ),
+        sa.Index("ix_events_project_receipt", "project_id", "received_at", "id"),
         sa.Index("ix_events_project_time", "project_id", "occurred_at"),
         sa.Index(
             "ix_event_auth_window",

@@ -104,16 +104,10 @@ pseudonyms stable. Replacing the HMAC key changes future correlations and
 invalidates existing pagination cursors; old records keep their existing hashes.
 Back up this configuration with the database and coordinate intentional changes.
 
-Automatic event expiry is not implemented. Stored events persist until project
-deletion or explicit operator cleanup; the 30-day acceptance/query span does not
-delete old rows. For local data minimization, an operator can run a scoped cleanup
-inside a backup-aware database maintenance session, using the intended project:
-
-```sql
-DELETE FROM security_events
-WHERE project_id = 'YOUR_PROJECT_UUID'::uuid
-  AND received_at < clock_timestamp() - interval '30 days';
-```
+The operator can run a bounded expiry job for one project. Preview is the default;
+applying a batch explicitly removes only events with successful jobs older than
+the receipt-time cutoff. The default retention period is 30 days. See the
+[retention and recovery runbook](operations.md) for commands and evidence semantics.
 
 Cleanup removes delivery deduplication records for those rows. Source names and
 sequence counters remain; project deletion cascades to sources, counters, keys
