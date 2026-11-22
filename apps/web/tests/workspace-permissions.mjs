@@ -31,8 +31,8 @@ export async function checkViewerAccess(browser, ownerPage, origin, project, acc
 
     assert.equal((await requestLocalApi(admin, "PUT", membership, { headers, data: { role: "viewer" } })).status(), 204);
     await page.reload();
-    await page.getByLabel("Organization", { exact: true }).selectOption(org);
-    await page.getByLabel("Project", { exact: true }).selectOption(project);
+    await page.getByRole("combobox", { name: "Organization", exact: true }).selectOption(org);
+    await page.getByRole("combobox", { name: "Project", exact: true }).selectOption(project);
     await page.getByRole("button", { name: "Incidents for Synthetic login demo" }).click();
     const summaryResponse = page.waitForResponse(response =>
       response.url().startsWith(detail + "/incidents/") && response.request().method() === "GET");
@@ -56,7 +56,7 @@ export async function checkViewerAccess(browser, ownerPage, origin, project, acc
     await page.getByText("This record is unavailable or your access has changed.").waitFor();
     await page.reload();
     await empty.waitFor();
-    assert.equal(await page.getByLabel("Project", { exact: true }).count(), 0);
+    assert.equal(await page.getByRole("combobox", { name: "Project", exact: true }).count(), 0);
     assert.equal(await page.getByRole("heading", { name: "Incident summary" }).count(), 0);
     console.log("Browser verified tenant isolation, viewer redaction and membership removal in the same session.");
   } finally {
