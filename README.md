@@ -215,7 +215,7 @@ This adds a missing event pseudonymization key while preserving existing secrets
 See [event contracts and privacy](docs/event-ingestion.md) for the batch schema,
 atomic error behavior, quotas, pagination, key rotation and retention boundaries.
 The worker evaluates three [detection rules](docs/detection-rules.md) and records
-the observations supporting each match.
+the observations supporting each match. Set the [worker thresholds](docs/detection-rules.md#configure-the-static-thresholds) in the local `.env` and recreate the worker to apply them.
 
 ## Apply the database migrations
 

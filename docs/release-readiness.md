@@ -16,7 +16,7 @@ The [operations baseline](https://github.com/risbh19/api-sentinel/actions/runs/4
 | Durable processing and explainable alerts | Event-job and detection-rule tests cover leases, retries, fencing, rolling thresholds, late arrivals and correlation. On the disposable stack, the rules smoke queues seven inputs with the worker stopped and requires a single finding and eight distinct evidence events after restart. |
 | Incident lifecycle, dashboard and audit | PostgreSQL tests cover transitions, assignment, audit and concurrency. Chrome checks evidence, assignment, a note, resolution and reopening. Mobile layout and three accessibility scans cover the selected investigation screens. |
 | Retention, diagnostics and recovery | The retention tests protect pending work and other projects. The restore rehearsal checks a fresh database at migration head for missing jobs and timeline entries. The outage test exercises the surviving worker as well as a restarted worker. |
-| Detection configuration | Partial against the plan's configurable-threshold wording. The three v1 rules use fixed, versioned thresholds in source. Operator-editable rule settings and evaluation replay are deferred. |
+| Detection configuration | All three [static thresholds](detection-rules.md#configure-the-static-thresholds) can be set per deployment. Tests exercise startup validation, custom threshold boundaries, alert detail, retries and preservation of existing alerts. Per-project tuning and historical replay remain v0.2 work. |
 | Security and documentation | Run the [security regressions and scans](security-checks.md), review the [threat model](threat-model.md), and follow the [local demo](local-demo.md) and [operations runbook](operations.md). Record findings or unavailable checks alongside the commit. |
 
 ### Recorded Ubuntu candidate run
@@ -58,5 +58,5 @@ Set `CHROME_BIN` to the installed browser path if it differs. Save the commit, W
 ## Release decision
 
 - A maintainer reviews the exact candidate diff, dependency and secret scans, CI outcome, and unresolved findings. Record environment, SHA and run links. An unexplained critical or high finding blocks release.
-- Keep the release-readiness PR open until the Windows candidate run succeeds and the threshold requirement is implemented or its deferral explicitly accepted by the owner. After those gates and review pass, verify the merge commit on main before making a tagging decision.
+- Keep the release-readiness PR open until the Windows candidate run succeeds on the reviewed commit. After those gates and review pass, verify the merge commit on main before making a tagging decision.
 - Public ingress, multi-host failover and recovery onto replacement infrastructure fall outside this local release. The next optional work includes controlled fixture authorization tests, rule tuning, redacted exports and a consent-based GitHub integration.

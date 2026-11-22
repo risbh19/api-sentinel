@@ -1,6 +1,7 @@
 """Evaluate rolling event-time windows and retain the observations that crossed each threshold."""
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -23,6 +24,47 @@ class Rule:
 AUTH_FAILURES = Rule("authentication_failures", 8, 300)
 AUTH_DENIALS = Rule("authorization_denials", 10, 600)
 REQUEST_VOLUME = Rule("high_request_volume", 61, 60)
+
+
+# Reserve 1001..1100 for threshold variants of the original rule logic.
+MAX_THRESHOLD = 100
+THRESHOLD_VERSION_BASE = 1000
+
+
+def configured_rule(default: Rule) -> Rule:
+    name = f"SENTINEL_{default.key.upper()}_THRESHOLD"
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    if not (
+        1 <= len(value) <= 3
+        and value.isascii()
+        and value.isdecimal()
+        and 1 <= int(value) <= MAX_THRESHOLD
+    ):
+        raise ValueError(f"{name} must be an integer between 1 and {MAX_THRESHOLD}")
+    threshold = int(value)
+    if threshold == default.threshold:
+        return default
+    return replace(default, threshold=threshold, version=THRESHOLD_VERSION_BASE + threshold)
+
+
+@dataclass(frozen=True)
+class RuleSet:
+    failures: Rule = AUTH_FAILURES
+    denials: Rule = AUTH_DENIALS
+    volume: Rule = REQUEST_VOLUME
+
+    @classmethod
+    def from_environment(cls) -> "RuleSet":
+        return cls(
+            configured_rule(AUTH_FAILURES),
+            configured_rule(AUTH_DENIALS),
+            configured_rule(REQUEST_VOLUME),
+        )
+
+
+DEFAULT_RULES = RuleSet()
 
 
 def record_windows(
@@ -76,7 +118,7 @@ def record_windows(
         )
 
 
-def evaluate_event(conn: Connection, event_id: UUID) -> int:
+def evaluate_event(conn: Connection, event_id: UUID, *, settings: RuleSet = DEFAULT_RULES) -> int:
     event = SecurityEvent
     row = conn.execute(
         select(
@@ -97,11 +139,11 @@ def evaluate_event(conn: Connection, event_id: UUID) -> int:
     if row.actor_hash and row.event_type in ("authentication_failure", "authorization_denial"):
         actor = [*scope, event.actor_hash == row.actor_hash, event.event_type == row.event_type]
         if row.event_type == "authentication_failure":
-            rules.append((AUTH_FAILURES, actor))
+            rules.append((settings.failures, actor))
         else:
             rules.append(
                 (
-                    AUTH_DENIALS,
+                    settings.denials,
                     [
                         *actor,
                         event.method == row.method,
@@ -110,7 +152,7 @@ def evaluate_event(conn: Connection, event_id: UUID) -> int:
                 )
             )
     if row.client_hash:
-        rules.append((REQUEST_VOLUME, [*scope, event.client_hash == row.client_hash]))
+        rules.append((settings.volume, [*scope, event.client_hash == row.client_hash]))
     if rules:
         # Serialize overlapping recomputations. Under READ COMMITTED the following queries
         # see deliveries committed while this worker was waiting for the earlier evaluator.
