@@ -97,7 +97,14 @@ try {
   await page.getByRole("button",{name:"Move to resolved"}).click();
   await page.getByRole("button",{name:"Move to reopened"}).waitFor();
   await page.setViewportSize({width:390,height:844});
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth));
+  const mobileLayout = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    pageWidth: document.documentElement.scrollWidth,
+    overflowingElements: Array.from(document.querySelectorAll("main *"))
+      .filter(element => element.getBoundingClientRect().right > window.innerWidth)
+      .map(element => element.tagName.toLowerCase()).slice(0, 12),
+  }));
+  assert.ok(mobileLayout.pageWidth <= mobileLayout.viewport, JSON.stringify(mobileLayout));
   await checkAccessibility("Mobile incident detail");
   await page.setViewportSize({width:1280,height:800});
   console.log("Browser verified alert evidence, incident promotion, assignment, note and resolution. Three accessibility scans passed.");
