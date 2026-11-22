@@ -19,6 +19,10 @@ The [operations baseline](https://github.com/risbh19/api-sentinel/actions/runs/4
 | Detection configuration | Partial against the plan's configurable-threshold wording. The three v1 rules use fixed, versioned thresholds in source. Operator-editable rule settings and evaluation replay are deferred. |
 | Security and documentation | Run the [security regressions and scans](security-checks.md), review the [threat model](threat-model.md), and follow the [local demo](local-demo.md) and [operations runbook](operations.md). Record findings or unavailable checks alongside the commit. |
 
+### Recorded Ubuntu candidate run
+
+[Ubuntu workflow run 45028097755](https://github.com/risbh19/api-sentinel/actions/runs/45028097755) passed on `8d846418393d8df2df0315eec0abe9e0cd3a37e8`. The job reported 93 PostgreSQL integration tests, 70 unit tests and 20 frontend tests passing. The browser verified incident reopening and tenant isolation, and three accessibility scans passed. After worker restart the smoke test found one alert with eight distinct observations. The restore check reported zero missing jobs and zero missing timeline entries. The final PR checks record results for subsequent revisions.
+
 ## Windows clean-install gate
 
 Use a fresh checkout, a new Compose project name and unused default ports 8000 and 8080. Choose the candidate commit recorded on the PR. The clone command in the README defaults to main. For an open PR, fetch its branch and check out the recorded candidate SHA before initializing the environment. Docker Desktop must be running Linux containers. Install Python 3.11+, the Node version from the README and Google Chrome to include browser coverage. Run from PowerShell in the checkout, stopping on any nonzero exit code:
@@ -33,7 +37,9 @@ function Invoke-Checked {
 Invoke-Checked git @("rev-parse", "HEAD")
 Invoke-Checked docker @("compose", "version")
 $env:COMPOSE_PROJECT_NAME = "sentinel-check-" + [guid]::NewGuid().ToString("N")
-$env:CHROME_BIN = Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"
+if (-not $env:CHROME_BIN) {
+    $env:CHROME_BIN = Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"
+}
 if (!(Test-Path -LiteralPath $env:CHROME_BIN)) { throw "Set CHROME_BIN to the installed browser" }
 Invoke-Checked python @("scripts/init_env.py")
 try {
