@@ -1,3 +1,6 @@
+import subprocess
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
@@ -145,6 +148,47 @@ def test_alert_pages_evidence_and_scope(
         assert len(ids) == len(set(ids)) == 9 and last["next_evidence_cursor"] is None
         assert client.get(path, params={"after": str(uuid4())}).status_code == 400
         assert client.get(f"/api/v1/projects/{owner}/events/{ids[0]}").status_code == 200
+
+
+def test_worker_startup_applies_threshold_to_alert_detail(
+    database: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    email, _, org = add_user(database, Role.OWNER)
+    owner = make_project(database, org)
+    stamp = datetime.now(UTC) - timedelta(minutes=1)
+    send(database, owner, [sample(AUTH_FAILURES, str(i), stamp) for i in range(2)])
+    monkeypatch.setenv("SENTINEL_AUTHENTICATION_FAILURES_THRESHOLD", "2")
+    with subprocess.Popen([sys.executable, "-m", "api_sentinel.worker"]) as worker:
+        try:
+            deadline = time.monotonic() + 20
+            while True:
+                with database.connect() as conn:
+                    if (
+                        conn.scalar(
+                            text("SELECT count(*) FROM event_jobs WHERE state='succeeded'")
+                        )
+                        == 2
+                    ):
+                        break
+                assert worker.poll() is None and time.monotonic() < deadline
+                time.sleep(0.1)
+        finally:
+            worker.terminate()
+            try:
+                worker.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                worker.kill()
+    url = f"/api/v1/projects/{owner}/alerts"
+    with TestClient(create_app(engine=database), base_url=ORIGIN) as client:
+        login(client, email)
+        [summary] = client.get(url).json()["entries"]
+        detail = client.get(f"{url}/{summary['id']}").json()
+    assert (detail["version"], detail["threshold"], len(detail["evidence"])) == (1002, 2, 2)
+    assert (
+        detail["explanation"]
+        == "Authentication failures for one actor: at least 2 observations in 300 seconds."
+    )
+    assert "expired credentials" in detail["caveat"]
 
 
 def test_rule_dimensions_severity_and_counts(database: Engine) -> None:

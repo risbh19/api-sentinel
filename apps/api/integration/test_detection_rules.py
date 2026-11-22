@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from threading import Barrier
 from uuid import UUID
 
@@ -9,7 +10,15 @@ from alembic.config import Config
 from sqlalchemy import Engine, text
 
 from api_sentinel.database import transaction
-from api_sentinel.detections.rules import AUTH_DENIALS, AUTH_FAILURES, REQUEST_VOLUME, Rule
+from api_sentinel.detections.rules import (
+    AUTH_DENIALS,
+    AUTH_FAILURES,
+    DEFAULT_RULES,
+    REQUEST_VOLUME,
+    Rule,
+    RuleSet,
+    evaluate_event,
+)
 from api_sentinel.ingestion.events import EventBatch
 from api_sentinel.ingestion.records import ingest
 from api_sentinel.organizations.records import OrganizationRecords, create_organization
@@ -47,10 +56,11 @@ def send(engine: Engine, owner: UUID, rows: list[dict[str, object]], source: str
         return ingest(db, owner, batch, bytes(32))
 
 
-def drain(engine: Engine) -> None:
+def drain(engine: Engine, settings: RuleSet = DEFAULT_RULES) -> None:
+    handler = partial(evaluate_event, settings=settings)
     while jobs := claim(engine):
         for event_id, attempt in jobs:
-            assert process(engine, event_id, attempt)
+            assert process(engine, event_id, attempt, handler)
 
 
 def findings(engine: Engine) -> list[tuple[str, int, int, int, list[str]]]:
@@ -95,6 +105,57 @@ def test_rolling_threshold_edges_replay_and_ties(database: Engine, rule: Rule) -
         conn.execute(text("UPDATE event_jobs SET state='pending', attempts=0, available_at=now()"))
     drain(database)
     assert findings(database) == matches
+
+
+@pytest.mark.parametrize("rule", [AUTH_FAILURES, AUTH_DENIALS, REQUEST_VOLUME])
+def test_configured_threshold_replay_and_default_history(
+    database: Engine, monkeypatch: pytest.MonkeyPatch, rule: Rule
+) -> None:
+    owner = project(database)
+    stamp = datetime.now(UTC) - timedelta(minutes=1)
+    rows = [sample(rule, f"obs-{i:03}", stamp) for i in range(rule.threshold)]
+    send(database, owner, rows)
+    drain(database)
+    original = findings(database)
+    assert len(original) == 1 and original[0][1] == 1
+
+    monkeypatch.setenv(f"SENTINEL_{rule.key.upper()}_THRESHOLD", "2")
+    settings = RuleSet.from_environment()
+    # Same deployment, second source. One input is below the custom boundary.
+    send(database, owner, rows[:1], source="configured")
+    drain(database, settings)
+    assert findings(database) == original
+    send(database, owner, rows[1:2], source="configured")
+    drain(database, settings)
+    # Reprocess one of the original source's jobs under the new settings.
+    # Its new alert must stay separate from the original in the same UTC bucket.
+    with database.begin() as conn:
+        retry = text("""UPDATE event_jobs SET state='pending', attempts=0, available_at=now()
+                        WHERE event_id IN (SELECT id FROM security_events WHERE external_event_id='obs-001')""")
+        conn.execute(retry)
+    drain(database, settings)
+    matches = findings(database)
+    assert original[0] in matches
+    with database.connect() as conn:
+        alerts = conn.execute(
+            text("""SELECT id, source_id, version, threshold, window_seconds, occurrence_count
+                                     FROM alert_summaries ORDER BY source_id, version""")
+        ).all()
+    assert [(a.source_id, a.version, a.threshold, a.window_seconds) for a in alerts] == [
+        ("configured", 1002, 2, rule.seconds),
+        ("demo", 1, rule.threshold, rule.seconds),
+        ("demo", 1002, 2, rule.seconds),
+    ]
+    assert alerts[0].occurrence_count == 1
+    assert (rule.key, 1002, 2, rule.seconds, ["obs-000", "obs-001"]) in matches
+    with database.begin() as conn:
+        conn.execute(retry)
+    drain(database, settings)
+    assert findings(database) == matches
+    with database.connect() as conn:
+        assert conn.execute(
+            text("SELECT id, occurrence_count FROM alert_summaries ORDER BY source_id, version")
+        ).all() == [(a.id, a.occurrence_count) for a in alerts]
 
 
 def test_unrelated_observations_stay_separate(database: Engine) -> None:

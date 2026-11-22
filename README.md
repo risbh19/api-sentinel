@@ -1,22 +1,23 @@
 # API Sentinel
 
-A local-first API security monitoring application in development. The workspace supports sign-in, project access, OpenAPI inventory, ingestion keys and persisted security events from PostgreSQL.
-The service status page reports FastAPI and database readiness. Open the web
-page to check the connection again after stopping or restarting the database.
+API Sentinel turns telemetry from an instrumented API into a project-scoped investigation. Import a contract, send observations with an ingestion key, and follow a worker-generated alert to its supporting events and incident timeline. A finding describes a pattern in the reported traffic. Its evidence and possible benign explanations are available in the workspace.
 
-To follow a synthetic observation from ingestion through alert evidence and incident resolution, use the [local security demo](docs/local-demo.md).
+For a first investigation, follow the [synthetic local demo](docs/local-demo.md) on its own Compose project. For a regular workspace, use the steps below. The [architecture](docs/architecture.md), [threat model](docs/threat-model.md) and [v0.1 release checklist](docs/release-readiness.md) describe the supported configuration and verification status.
 
 ## Start locally
 
-Install Docker with Compose v2.20+ and Python 3.10+ for the helper scripts.
-From the repository root, run these commands in PowerShell, Bash or zsh.
+Use Git, Docker with Compose v2.20+ and Python 3.11+ for the full verification walkthrough. On Windows, start Docker Desktop in Linux container mode. From PowerShell, Bash or zsh, clone the repository and start the stack:
 
 ```sh
+git clone https://github.com/risbh19/api-sentinel.git
+cd api-sentinel
 python scripts/init_env.py
 docker compose up --build --wait
 docker compose ps
 python scripts/smoke.py
 ```
+
+On Windows, use `py -3.11` in place of `python` if that is how the interpreter is installed. The first build needs network access for the pinned dependencies and base images. The running demo uses local services.
 
 Open [Service status](http://127.0.0.1:8080). The API is available on port
 8000. Only the web and API ports are published, both on loopback. Set
@@ -214,7 +215,7 @@ This adds a missing event pseudonymization key while preserving existing secrets
 See [event contracts and privacy](docs/event-ingestion.md) for the batch schema,
 atomic error behavior, quotas, pagination, key rotation and retention boundaries.
 The worker evaluates three [detection rules](docs/detection-rules.md) and records
-the observations supporting each match.
+the observations supporting each match. Set the [worker thresholds](docs/detection-rules.md#configure-the-static-thresholds) in the local `.env` and recreate the worker to apply them.
 
 ## Apply the database migrations
 
@@ -224,12 +225,12 @@ use the same commands as a new installation.
 
 ```sh
 docker compose run --rm --build migrate
-docker compose run --rm migrate alembic current
+docker compose run --rm migrate alembic current --check-heads
 docker compose run --rm migrate alembic check
 docker compose run --rm --build record-tests
 ```
 
-The current revision is `0010_incident_workflows`. Downgrading to 0009 refuses to discard incident history. Upgrading from 0008 groups
+The current revision is `0011_event_retention`. Its downgrade removes the receipt-time index. Downgrading to 0009 refuses to discard incident history. Upgrading from 0008 groups
 existing findings immediately. Downgrading to 0008 removes alert IDs and evidence
 links and preserves findings and events. Reapplying creates new alert IDs. When upgrading from 0007, stop
 the existing worker before migration, then rebuild and start the Compose stack.
@@ -272,19 +273,20 @@ For frontend development, run the Compose stack with the default API port,
 set `SENTINEL_WEB_ORIGIN=http://127.0.0.1:5173` in .env, then recreate the api service.
 Run `npm ci` and `npm run dev` in apps/web and open that exact origin.
 Restore the Compose web origin when returning to the packaged UI.
-For native API development, set PGHOST, PGPORT and PGDATABASE for a local
-PostgreSQL database. With the administrator PGUSER and PGPASSWORD, set
-SENTINEL_APP_PASSWORD and SENTINEL_WORKER_PASSWORD to distinct generated secrets
-of at least 32 characters each and run
-`uv run --locked python -m api_sentinel.identity.operator prepare`
-from apps/api with PYTHONPATH set to src. If you already ran Compose setup,
-use its provisioned roles and app credential instead. Start the server with
-PGUSER=sentinel_probe, PGPASSWORD set to its probe password, the matching
-SENTINEL_APP_PASSWORD and the web origin for your frontend.
+For native development use a separate local PostgreSQL 16 cluster. Create a database
+named `sentinel` and set `PGHOST`, `PGPORT` and `PGDATABASE=sentinel`.
+Generate the local environment with `scripts/init_env.py`. Compose reads that file
+automatically. Native processes need the corresponding values set in their own environments.
+
+1. In an administrator shell, supply the administrator's `PGUSER` and `PGPASSWORD` plus the generated `SENTINEL_PROBE_PASSWORD`. From the repository root run `psql -X -v ON_ERROR_STOP=1 -f deploy/postgres/10-probe.sql` once on the fresh database. This creates the probe role and restricts schema access.
+2. In that shell set `SENTINEL_APP_PASSWORD` and `SENTINEL_WORKER_PASSWORD` to their distinct generated values. From `apps/api`, with `PYTHONPATH=src`, run `uv run --locked python -m api_sentinel.identity.operator prepare` to apply migrations and runtime grants.
+3. In a separate API shell set `PGUSER=sentinel_probe`, its `PGPASSWORD`, the matching `SENTINEL_APP_PASSWORD`, and `SENTINEL_EVENT_HMAC_KEY` (64 lowercase hex characters). Set `SENTINEL_WEB_ORIGIN` to the exact frontend origin. From `apps/api` run:
 
 ```sh
 uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --loop asyncio:SelectorEventLoop --host 127.0.0.1 --port 8000 --no-access-log --no-server-header --no-proxy-headers
 ```
+
+4. In a worker shell connected to the same database, set `PGUSER=sentinel_worker`, its matching `PGPASSWORD` and `PYTHONPATH=src`. Run `uv run --locked python -m api_sentinel.worker` from `apps/api`. The worker drains queued observations and writes findings.
 
 Run dependency checks from apps/api with `uv audit --locked` and from
 apps/web with `npm audit`. Both require access to an advisory service.

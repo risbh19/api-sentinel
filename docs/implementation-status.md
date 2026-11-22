@@ -36,5 +36,16 @@ deduplication and the event explorer.
 [Incident workflows](https://github.com/risbh19/api-sentinel/pull/14) merged at
 `221071b` with alert promotion, assignment, notes and resolution history.
 
-The project dashboard reads scoped event totals, open alerts and active incidents.
-Investigators can follow alert evidence and manage incidents through the web workspace.
+[Security dashboard](https://github.com/risbh19/api-sentinel/pull/15) merged at
+`6a3933e` with scoped metrics, evidence and incident investigation screens.
+
+[Local demo](https://github.com/risbh19/api-sentinel/pull/16) merged at
+`2efb4f5` with explicit synthetic onboarding and repeatable telemetry.
+
+[Security checks](https://github.com/risbh19/api-sentinel/pull/17) merged at
+`fe08ba7` with cross-tenant replay, viewer redaction and membership-removal checks.
+
+[Operations](https://github.com/risbh19/api-sentinel/pull/18) merged at
+`88eae15` with bounded event expiry, worker diagnostics and a backup restore rehearsal.
+
+See the [release checklist](release-readiness.md) for validation evidence and open gates.

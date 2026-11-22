@@ -22,10 +22,20 @@ from uuid import UUID, uuid4
 from check_emitter import RejectRedirect, check
 
 
-def check_detection(project: UUID, emitter_env: dict[str, str], request, csrf: str) -> None:
+def check_detection(
+    project: UUID, emitter_env: dict[str, str], request, csrf: str, restart_worker: bool
+) -> None:
     # The emitter already submitted and replayed one observation for this fresh project.
-    for _ in range(7):
-        subprocess.run([sys.executable, "scripts/emit_event.py"], env=emitter_env, check=True)
+    if restart_worker:
+        subprocess.run(["docker", "compose", "stop", "worker"], check=True)
+    try:
+        for _ in range(7):
+            subprocess.run([sys.executable, "scripts/emit_event.py"], env=emitter_env, check=True)
+        if restart_worker:
+            assert request(f"/projects/{project}/alerts")["entries"] == []
+    finally:
+        if restart_worker:
+            subprocess.run(["docker", "compose", "start", "worker"], check=True)
     path = f"/projects/{project}/alerts"
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
@@ -118,7 +128,14 @@ def main() -> None:
     parser.add_argument(
         "--rules", action="store_true", help="Check a finding from the running worker"
     )
+    parser.add_argument(
+        "--restart-worker",
+        action="store_true",
+        help="Stop the disposable worker while queuing rule inputs",
+    )
     args = parser.parse_args()
+    if args.restart_worker and not args.rules:
+        parser.error("--restart-worker requires --rules")
     origin = "http://127.0.0.1:8080"
     email, password = provision_account(
         *(["--demo"] if args.browser else ["--new-organization", "Synthetic smoke team"])
@@ -189,7 +206,9 @@ def main() -> None:
     assert detail["external_event_id"] == event_id and detail["actor_hash"]
     assert "actor_token" not in detail
     if args.rules:
-        check_detection(UUID(project["id"]), emitter_env, request, account["csrf_token"])
+        check_detection(
+            UUID(project["id"]), emitter_env, request, account["csrf_token"], args.restart_worker
+        )
     rotated = request(
         keys + "/" + made["key"]["id"] + "/rotate",
         method="POST",
@@ -205,6 +224,14 @@ def main() -> None:
         expected=204,
     )
     assert check(UUID(project["id"]), rotated["secret"]) == 401
+    rejected = subprocess.run(
+        [sys.executable, "scripts/emit_event.py"],
+        env={**os.environ, "SENTINEL_INGESTION_KEY": rotated["secret"]},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert rejected.returncode != 0 and "HTTP 401" in rejected.stderr
     assert request("/auth/activity")["entries"][0]["action"] == "session.login"
     request("/auth/logout", method="POST", csrf=account["csrf_token"], expected=204)
     request("/auth/me", expected=401)

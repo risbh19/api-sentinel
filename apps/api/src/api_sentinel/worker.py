@@ -5,6 +5,7 @@ import json
 import signal
 from collections.abc import Callable
 from datetime import timedelta
+from functools import partial
 from threading import Event
 from uuid import UUID
 
@@ -12,7 +13,7 @@ from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import OperationalError
 
 from api_sentinel.database import open_engine
-from api_sentinel.detections.rules import evaluate_event
+from api_sentinel.detections.rules import RuleSet, evaluate_event
 
 BATCH_SIZE = 16
 LEASE = timedelta(seconds=30)
@@ -115,6 +116,10 @@ def main() -> None:
         "--status", action="store_true", help="Print aggregate queue counts and lag"
     )
     args = parser.parse_args()
+    try:
+        handler = partial(evaluate_event, settings=RuleSet.from_environment())
+    except ValueError as error:
+        parser.error(str(error))
     stopped = Event()
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda *_: stopped.set())
@@ -130,7 +135,7 @@ def main() -> None:
                 for event_id, attempt in jobs:
                     if stopped.is_set():
                         break
-                    process(engine, event_id, attempt)
+                    process(engine, event_id, attempt, handler)
                 if not jobs:
                     stopped.wait(1)
             except OperationalError:

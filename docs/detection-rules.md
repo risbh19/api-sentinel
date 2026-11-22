@@ -11,6 +11,24 @@ The version 1 thresholds are synthetic defaults.
 | `authorization_denials` | At least 10 authorization denial events (403) for one actor, method and route template in 10 minutes | A client is using an outdated role or route configuration. |
 | `high_request_volume` | More than 60 reported requests of any category for one client in 60 seconds | A batch job or legitimate traffic spike. |
 
+## Configure the static thresholds
+
+Set these worker settings in the checkout's `.env`. Each value is the minimum number of observations for a match, from 1 to 100 inclusive. The upper bound limits how many evidence records each rolling window retains.
+
+| Setting | Default | Rolling window |
+| --- | --- | --- |
+| `SENTINEL_AUTHENTICATION_FAILURES_THRESHOLD` | 8 | 300 seconds |
+| `SENTINEL_AUTHORIZATION_DENIALS_THRESHOLD` | 10 | 600 seconds |
+| `SENTINEL_HIGH_REQUEST_VOLUME_THRESHOLD` | 61 | 60 seconds |
+
+For example, set `SENTINEL_HIGH_REQUEST_VOLUME_THRESHOLD=40`, then run `docker compose up -d --force-recreate worker`. The worker reads the settings at startup and exits before claiming jobs if a value is invalid. Use the same settings on every worker in a deployment. They apply across projects. The packaged demo and smoke walkthrough use the defaults.
+
+A default threshold retains rule version 1. For these three rules, a custom threshold N selects version 1000 + N, so 40 observations select version 1040. Restoring a previous threshold restores its version. Alerts keep the version, threshold, window and evidence stored with the finding. Versions have separate alert fingerprints.
+
+New and pending jobs use the settings active when the worker processes them. Their rolling windows can include earlier observations. Changing settings does not enqueue completed jobs for a historical replay.
+
+## Window and evidence behavior
+
 Missing actor or client pseudonyms skip that particular rule. Rotating the
 pseudonym key starts a new group. Emitters should send one observation per
 request. Each timestamp boundary is inclusive. Within one source, external event

@@ -9,6 +9,8 @@ from sqlalchemy import text
 from api_sentinel.identity.routes import DB, Principal, project_scope
 from api_sentinel.identity.security import Permission
 
+from .rules import MAX_THRESHOLD, THRESHOLD_VERSION_BASE
+
 router = APIRouter(prefix="/api/v1/projects/{project_id}/alerts")
 PageSize = Annotated[int, Query(ge=1, le=100)]
 Status = Literal["open", "acknowledged", "resolved"]
@@ -133,8 +135,14 @@ def detail(
     if not row["valid_cursor"]:
         raise HTTPException(400, "Invalid evidence cursor for this alert")
     ids = row["ids"]
+    version = row["version"]
+    if (
+        1 <= row["threshold"] <= MAX_THRESHOLD
+        and version == THRESHOLD_VERSION_BASE + row["threshold"]
+    ):
+        version = 1
     label, caveat = EXPLANATIONS.get(
-        (row["rule_key"], row["version"]),
+        (row["rule_key"], version),
         (
             "Matching observations",
             "Review the rule version and supporting events to interpret this alert.",
