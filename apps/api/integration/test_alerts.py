@@ -62,7 +62,7 @@ def test_replay_late_arrivals_and_retention(database: Engine) -> None:
             sample(AUTH_FAILURES, "next", boundary + timedelta(seconds=1)),
         ],
     )
-    jobs = claim(database)
+    jobs = claim(database) + claim(database)
     barrier = Barrier(2)
 
     def run(job: tuple[UUID, int]) -> bool:

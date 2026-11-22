@@ -124,7 +124,7 @@ by detection rules and finding storage. The API process keeps its own login.
 
 An insert trigger queues each new event in the same transaction. Migration
 0007 also queues existing events. Replayed deliveries keep their original job.
-Each worker claims up to 16 due jobs using PostgreSQL row locks and skips rows
+Each worker claims one due job at a time using PostgreSQL row locks and skips rows
 another worker holds. A claim has a 30-second lease. After a crash, another
 worker can claim an expired lease. The attempt number fences stale workers.
 Completion and the signed millisecond difference between receipt and occurrence

@@ -194,7 +194,7 @@ def test_late_evidence_converges_with_concurrent_workers(database: Engine) -> No
     drain(database)
     assert findings(database)[0][-1] == ids[:7] + ids[9:]
     send(database, owner, rows[7:9])
-    jobs = claim(database)
+    jobs = claim(database) + claim(database)
     assert len(jobs) == 2
     barrier = Barrier(2)
 

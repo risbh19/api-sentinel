@@ -15,7 +15,6 @@ from sqlalchemy.exc import OperationalError
 from api_sentinel.database import open_engine
 from api_sentinel.detections.rules import RuleSet, evaluate_event
 
-BATCH_SIZE = 16
 LEASE = timedelta(seconds=30)
 MAX_ATTEMPTS = 5
 
@@ -28,7 +27,7 @@ def claim(engine: Engine) -> list[tuple[UUID, int]]:
             WITH due AS (
                 SELECT event_id FROM event_jobs
                 WHERE state IN ('pending','running') AND available_at <= now()
-                ORDER BY available_at, event_id LIMIT :limit FOR UPDATE SKIP LOCKED
+                ORDER BY available_at, event_id LIMIT 1 FOR UPDATE SKIP LOCKED
             )
             UPDATE event_jobs AS j
             SET state = CASE WHEN attempts >= :maximum THEN 'dead' ELSE 'running' END,
@@ -37,7 +36,7 @@ def claim(engine: Engine) -> list[tuple[UUID, int]]:
             FROM due WHERE j.event_id = due.event_id
             RETURNING j.event_id, j.attempts, j.state
         """),
-            {"limit": BATCH_SIZE, "maximum": MAX_ATTEMPTS, "lease": LEASE},
+            {"maximum": MAX_ATTEMPTS, "lease": LEASE},
         )
         return [(event_id, attempt) for event_id, attempt, state in rows if state == "running"]
 

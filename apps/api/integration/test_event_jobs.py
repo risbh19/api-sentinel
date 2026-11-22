@@ -15,7 +15,7 @@ from api_sentinel.database import transaction
 from api_sentinel.ingestion.events import EventBatch
 from api_sentinel.ingestion.records import ingest
 from api_sentinel.organizations.records import OrganizationRecords, create_organization
-from api_sentinel.worker import BATCH_SIZE, MAX_ATTEMPTS, claim, process, status
+from api_sentinel.worker import MAX_ATTEMPTS, claim, process, status
 
 
 def project(database: Engine) -> UUID:
@@ -70,8 +70,8 @@ def test_upgrade_backfills_and_ingestion_enqueues_atomically(
     assert status(database)["pending"] == 0
 
 
-def test_two_workers_claim_disjoint_bounded_batches(database: Engine) -> None:
-    count = BATCH_SIZE * 2 + 1
+def test_two_workers_claim_distinct_jobs(database: Engine) -> None:
+    count = 3
     assert emit(database, project(database), *(f"item-{i}" for i in range(count))) == count
     barrier = Barrier(2)
 
@@ -82,10 +82,31 @@ def test_two_workers_claim_disjoint_bounded_batches(database: Engine) -> None:
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(simultaneous) for _ in range(2)]
         first, second = [future.result() for future in futures]
-    assert len(first) == len(second) == BATCH_SIZE
+    assert len(first) == len(second) == 1
     assert set(first).isdisjoint(second)
     assert len(claim(database)) == 1
     assert claim(database) == []
+
+
+def test_waiting_job_keeps_its_retry_budget(database: Engine) -> None:
+    emit(database, project(database), "slow", "waiting")
+    first = claim(database)[0]
+    # Model a worker that stays busy beyond the lease deadline.
+    with database.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE event_jobs SET available_at=now()-interval '1 second' WHERE state='running'"
+            )
+        )
+        waiting = conn.execute(
+            text("SELECT state, attempts FROM event_jobs WHERE event_id<>:id"), {"id": first[0]}
+        ).one()
+    assert waiting == ("pending", 0)
+    # The expired claim is recovered; both jobs eventually complete.
+    while jobs := claim(database):
+        for job in jobs:
+            assert process(database, *job)
+    assert status(database)["succeeded"] == 2
 
 
 def test_crash_after_claim_and_replacement_worker(database: Engine) -> None:
