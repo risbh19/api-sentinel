@@ -2,7 +2,7 @@
 
 API Sentinel helps a team investigate unusual traffic reported by its own APIs. Import an OpenAPI contract, send events from an instrumented application, then trace a rule-generated alert back to its supporting observations. Investigators can assign an incident, add notes and record its resolution.
 
-[Watch the narrated walkthrough (MP4)](docs/media/walkthrough.mp4) · [Follow the same synthetic investigation](docs/local-demo.md)
+[Watch the demo (MP4)](docs/media/demo.mp4) · [Follow the same synthetic investigation](docs/local-demo.md)
 
 ![Project overview showing nine synthetic observations and one alert](docs/media/overview.png)
 
