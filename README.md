@@ -50,5 +50,3 @@ FastAPI serves the API, PostgreSQL stores project records and durable jobs, and 
 | Tune thresholds or manage an investigation | [Detection rules](docs/detection-rules.md) · [Incident workflows](docs/incident-workflows.md) |
 | Check migrations, retention or recovery | [Operator reference](docs/local-reference.md) · [Operations runbook](docs/operations.md) |
 | Verify a release candidate | [Release evidence and Windows walkthrough](docs/release-readiness.md) · [Security checks](docs/security-checks.md) |
-
-[Apache License 2.0](LICENSE)
