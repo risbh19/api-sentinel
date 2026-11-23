@@ -48,4 +48,13 @@ deduplication and the event explorer.
 [Operations](https://github.com/risbh19/api-sentinel/pull/18) merged at
 `88eae15` with bounded event expiry, worker diagnostics and a backup restore rehearsal.
 
+[Release readiness](https://github.com/risbh19/api-sentinel/pull/19) merged at
+`256356f` with configurable detection thresholds and the verified local investigation walkthrough.
+
+[Worker leases](https://github.com/risbh19/api-sentinel/pull/20) merged at
+`8281d30`. The worker claims one job at a time so waiting jobs retain their retry budget.
+
+[Dashboard refresh](https://github.com/risbh19/api-sentinel/pull/21) merged at
+`96c4126` with a rolling default event window, fixed custom ranges and updated alert controls.
+
 See the [release checklist](release-readiness.md) for validation evidence and open gates.

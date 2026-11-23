@@ -19,9 +19,14 @@ The [operations baseline](https://github.com/risbh19/api-sentinel/actions/runs/4
 | Detection configuration | All three [static thresholds](detection-rules.md#configure-the-static-thresholds) can be set per deployment. Tests exercise startup validation, custom threshold boundaries, alert detail, retries and preservation of existing alerts. Per-project tuning and historical replay remain v0.2 work. |
 | Security and documentation | Run the [security regressions and scans](security-checks.md), review the [threat model](threat-model.md), and follow the [local demo](local-demo.md) and [operations runbook](operations.md). Record findings or unavailable checks alongside the commit. |
 
-### Recorded Ubuntu candidate run
+### Recorded verification
 
-[Ubuntu workflow run 45028097755](https://github.com/risbh19/api-sentinel/actions/runs/45028097755) passed on `8d846418393d8df2df0315eec0abe9e0cd3a37e8`. The job reported 93 PostgreSQL integration tests, 70 unit tests and 20 frontend tests passing. The browser verified incident reopening and tenant isolation, and three accessibility scans passed. After worker restart the smoke test found one alert with eight distinct observations. The restore check reported zero missing jobs and zero missing timeline entries. The final PR checks record results for subsequent revisions.
+| Platform | Tested commit | Result |
+| --- | --- | --- |
+| Ubuntu, after the worker lease and dashboard fixes | `f9a3ae495ee02b80482075e84228699e62f53d7e` | Fresh Compose startup, migrations, 98 PostgreSQL tests, 79 API unit tests, 21 frontend tests and 3 Node checks passed, along with Chrome, worker restart, outage recovery and restore. The merge commit `96c4126fae65bbe3063e7fae89b750b99f935773` has the same Git tree. [Ubuntu run](https://github.com/risbh19/api-sentinel/actions/runs/45061279522) |
+| Windows Docker Desktop, before those two fixes | `a6a936f70011059052b9b9480d75fafa4618b913` | The owner verified fresh startup, migration head `0011_event_retention`, worker restart with eight observations producing one alert, incident reopening, tenant isolation and three accessibility scans. Windows build 10.0.26300.0 used Docker Engine 29.8.2 and Compose 5.5.1. Host Node 26.12.0 produced an engine warning. Use the documented Node 24.22.3 for a new run. [Windows evidence on PR #19](https://github.com/risbh19/api-sentinel/pull/19) |
+
+For a formal release of the post-fix candidate, record a Windows run on the selected revision using the steps below. The Windows result above applies to the earlier revision.
 
 ## Windows clean-install gate
 
@@ -53,10 +58,10 @@ try {
 }
 ```
 
-Set `CHROME_BIN` to the installed browser path if it differs. Save the commit, Windows and Docker versions, each command result and any failure. Keep the generated environment and demo credentials private. The original foundation received a Windows startup and outage check. The full current Windows candidate walkthrough still needs evidence.
+Set `CHROME_BIN` to the installed browser path if it differs. Save the commit, Windows and Docker versions, each command result and any failure. Keep the generated environment and demo credentials private.
 
 ## Release decision
 
 - A maintainer reviews the exact candidate diff, dependency and secret scans, CI outcome, and unresolved findings. Record environment, SHA and run links. An unexplained critical or high finding blocks release.
-- Keep the release-readiness PR open until the Windows candidate run succeeds on the reviewed commit. After those gates and review pass, verify the merge commit on main before making a tagging decision.
+- Before tagging a formal release, verify the Windows walkthrough on the selected revision, review its Ubuntu checks, and confirm the reviewed changes are on main. Local use and demos can run directly from a checkout.
 - Public ingress, multi-host failover and recovery onto replacement infrastructure fall outside this local release. The next optional work includes controlled fixture authorization tests, rule tuning, redacted exports and a consent-based GitHub integration.
