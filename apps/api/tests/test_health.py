@@ -35,8 +35,11 @@ def test_connection_failure_is_private(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setenv("PGHOST", "127.0.0.1")
-    monkeypatch.setenv("PGPORT", "0")
+    monkeypatch.setenv("PGPORT", "1")
+    monkeypatch.setenv("PGUSER", "sentinel_app")
+    monkeypatch.setenv("PGDATABASE", "synthetic")
     secret = "synthetic-secret-for-log-test"
+    monkeypatch.setenv("SENTINEL_APP_PASSWORD", secret)
     monkeypatch.setenv("PGPASSWORD", secret)
     with caplog.at_level(logging.INFO), TestClient(create_app()) as client:
         response = client.get("/health/ready", headers={"Authorization": f"Bearer {secret}"})
@@ -45,6 +48,22 @@ def test_connection_failure_is_private(
     assert response.json() == {"status": "unavailable"}
     assert secret not in caplog.text
     assert secret not in response.text
+
+
+def test_missing_application_password_skips_database_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    import psycopg
+
+    connect = AsyncMock(side_effect=AssertionError("Readiness used fallback credentials"))
+    monkeypatch.setattr(psycopg.AsyncConnection, "connect", connect)
+    monkeypatch.delenv("SENTINEL_APP_PASSWORD", raising=False)
+    with TestClient(create_app()) as client:
+        assert client.get("/health/ready").status_code == 503
+        assert client.get("/health/live").status_code == 200
+    connect.assert_not_awaited()
 
 
 def test_request_log_omits_unmatched_path_query_and_headers(

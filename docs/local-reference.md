@@ -250,9 +250,13 @@ Downgrading to `0001_project_records` deletes identity and session data.
 Downgrading to base also deletes organization and project data. Use a disposable database
 for rollback tests. Back up retained records before an intentional rollback.
 
-These one-shot tools use the local database administrator. API readiness
-continues to use the restricted probe login. The internal records interface
-accepts an organization scope and supports project creation, lookup, paged
+These one-shot tools use the local database administrator. API readiness checks
+that the application login can read the project ID column without fetching rows.
+An invalid application credential or inaccessible project table returns 503.
+If liveness succeeds and readiness returns 503, check the application credential,
+bootstrap migration result and project table grants before restarting the worker.
+
+The internal records interface accepts an organization scope and supports project creation, lookup, paged
 listing, rename and deletion. The database enforces unique slugs within each
 organization and prevents deleting an organization that still owns projects.
 The application uses the separate sentinel_app database login for authenticated requests.
@@ -276,7 +280,7 @@ automatically. Native processes need the corresponding values set in their own e
 
 1. In an administrator shell, supply the administrator's `PGUSER` and `PGPASSWORD` plus the generated `SENTINEL_PROBE_PASSWORD`. From the repository root run `psql -X -v ON_ERROR_STOP=1 -f deploy/postgres/10-probe.sql` once on the fresh database. This creates the probe role and restricts schema access.
 2. In that shell set `SENTINEL_APP_PASSWORD` and `SENTINEL_WORKER_PASSWORD` to their distinct generated values. From `apps/api`, with `PYTHONPATH=src`, run `uv run --locked python -m api_sentinel.identity.operator prepare` to apply migrations and runtime grants.
-3. In a separate API shell set `PGUSER=sentinel_probe`, its `PGPASSWORD`, the matching `SENTINEL_APP_PASSWORD`, and `SENTINEL_EVENT_HMAC_KEY` (64 lowercase hex characters). Set `SENTINEL_WEB_ORIGIN` to the exact frontend origin. From `apps/api` run:
+3. In a separate API shell set `PGUSER=sentinel_app`, the matching `SENTINEL_APP_PASSWORD`, and `SENTINEL_EVENT_HMAC_KEY` (64 lowercase hex characters). Set `SENTINEL_WEB_ORIGIN` to the exact frontend origin. From `apps/api` run:
 
 ```sh
 uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --loop asyncio:SelectorEventLoop --host 127.0.0.1 --port 8000 --no-access-log --no-server-header --no-proxy-headers
