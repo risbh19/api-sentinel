@@ -49,7 +49,7 @@ python scripts/smoke.py
 ## Sign in and manage project access
 
 After startup, provision your first local owner from a terminal. The command
-prompts for a password (12–256 characters) and prints the new user's UUID.
+prompts for a password (12-256 characters) and prints the new user's UUID.
 
 ```sh
 docker compose run --rm migrate python -m api_sentinel.identity.operator create-user owner@example.test --new-organization "Local team"
@@ -98,7 +98,7 @@ Developer and viewer roles cannot read organization audit history.
 
 Pages return `entries` newest first and `next_cursor`. Pass its value as
 `before` to fetch older entries with the same filter. `limit` defaults to 50
-and accepts 1–100. A cursor must identify an entry visible in that query.
+and accepts 1-100. A cursor must identify an entry visible in that query.
 
 The audit record and its successful mutation commit together. Entries contain
 fixed action names, UUIDs, a database timestamp, and applicable old/new roles.
@@ -250,8 +250,10 @@ Downgrading to `0001_project_records` deletes identity and session data.
 Downgrading to base also deletes organization and project data. Use a disposable database
 for rollback tests. Back up retained records before an intentional rollback.
 
-These one-shot tools use the local database administrator. API readiness
-continues to use the restricted probe login. The internal records interface
+These one-shot tools use the local database administrator. API readiness checks
+that the application login can read the project ID column without fetching rows.
+An invalid application credential or inaccessible project table returns 503.
+The internal records interface
 accepts an organization scope and supports project creation, lookup, paged
 listing, rename and deletion. The database enforces unique slugs within each
 organization and prevents deleting an organization that still owns projects.
@@ -276,7 +278,7 @@ automatically. Native processes need the corresponding values set in their own e
 
 1. In an administrator shell, supply the administrator's `PGUSER` and `PGPASSWORD` plus the generated `SENTINEL_PROBE_PASSWORD`. From the repository root run `psql -X -v ON_ERROR_STOP=1 -f deploy/postgres/10-probe.sql` once on the fresh database. This creates the probe role and restricts schema access.
 2. In that shell set `SENTINEL_APP_PASSWORD` and `SENTINEL_WORKER_PASSWORD` to their distinct generated values. From `apps/api`, with `PYTHONPATH=src`, run `uv run --locked python -m api_sentinel.identity.operator prepare` to apply migrations and runtime grants.
-3. In a separate API shell set `PGUSER=sentinel_probe`, its `PGPASSWORD`, the matching `SENTINEL_APP_PASSWORD`, and `SENTINEL_EVENT_HMAC_KEY` (64 lowercase hex characters). Set `SENTINEL_WEB_ORIGIN` to the exact frontend origin. From `apps/api` run:
+3. In a separate API shell set `PGUSER=sentinel_app`, the matching `SENTINEL_APP_PASSWORD`, and `SENTINEL_EVENT_HMAC_KEY` (64 lowercase hex characters). Set `SENTINEL_WEB_ORIGIN` to the exact frontend origin. From `apps/api` run:
 
 ```sh
 uv run --locked uvicorn api_sentinel.main:create_app --factory --app-dir src --loop asyncio:SelectorEventLoop --host 127.0.0.1 --port 8000 --no-access-log --no-server-header --no-proxy-headers
@@ -302,5 +304,5 @@ session digests and expiry, and bounded login counters. No public registration o
 password recovery is available in this slice. Security event storage and queries
 are available. The worker groups versioned findings into project alerts. The [alert API](detection-rules.md#project-alerts) exposes their thresholds and supporting events. The [incident API](incident-workflows.md) supports triage and keeps an investigator timeline. In the project workspace, Overview shows events by occurrence time for the last 24 hours or 7 days in six equal UTC intervals. Open alerts and unresolved incidents are current totals. Use Alerts to inspect evidence or promote an alert, and Incidents to assign, update, and resolve investigations.
 
-[Runtime decision](decisions/0001-local-runtime.md) ·
+[Runtime decision](decisions/0001-local-runtime.md) �
 [Implementation status](implementation-status.md)
