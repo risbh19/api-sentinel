@@ -49,7 +49,7 @@ python scripts/smoke.py
 ## Sign in and manage project access
 
 After startup, provision your first local owner from a terminal. The command
-prompts for a password (12-256 characters) and prints the new user's UUID.
+prompts for a password (12–256 characters) and prints the new user's UUID.
 
 ```sh
 docker compose run --rm migrate python -m api_sentinel.identity.operator create-user owner@example.test --new-organization "Local team"
@@ -98,7 +98,7 @@ Developer and viewer roles cannot read organization audit history.
 
 Pages return `entries` newest first and `next_cursor`. Pass its value as
 `before` to fetch older entries with the same filter. `limit` defaults to 50
-and accepts 1-100. A cursor must identify an entry visible in that query.
+and accepts 1–100. A cursor must identify an entry visible in that query.
 
 The audit record and its successful mutation commit together. Entries contain
 fixed action names, UUIDs, a database timestamp, and applicable old/new roles.
@@ -253,8 +253,10 @@ for rollback tests. Back up retained records before an intentional rollback.
 These one-shot tools use the local database administrator. API readiness checks
 that the application login can read the project ID column without fetching rows.
 An invalid application credential or inaccessible project table returns 503.
-The internal records interface
-accepts an organization scope and supports project creation, lookup, paged
+If liveness succeeds and readiness returns 503, check the application credential,
+bootstrap migration result and project table grants before restarting the worker.
+
+The internal records interface accepts an organization scope and supports project creation, lookup, paged
 listing, rename and deletion. The database enforces unique slugs within each
 organization and prevents deleting an organization that still owns projects.
 The application uses the separate sentinel_app database login for authenticated requests.
@@ -304,5 +306,5 @@ session digests and expiry, and bounded login counters. No public registration o
 password recovery is available in this slice. Security event storage and queries
 are available. The worker groups versioned findings into project alerts. The [alert API](detection-rules.md#project-alerts) exposes their thresholds and supporting events. The [incident API](incident-workflows.md) supports triage and keeps an investigator timeline. In the project workspace, Overview shows events by occurrence time for the last 24 hours or 7 days in six equal UTC intervals. Open alerts and unresolved incidents are current totals. Use Alerts to inspect evidence or promote an alert, and Incidents to assign, update, and resolve investigations.
 
-[Runtime decision](decisions/0001-local-runtime.md) �
+[Runtime decision](decisions/0001-local-runtime.md) ·
 [Implementation status](implementation-status.md)
