@@ -23,3 +23,18 @@ The repository contains an event contract, scoped keys, transactional event jobs
 Use the [threat model](threat-model.md) and [security checks](security-checks.md) when changing object authorization, roles, resource limits or external calls. Preserve evidence that users in another organization cannot read records, and that revoked keys cannot ingest. Track advisories against locked packages and built images separately. A green unit suite alone leaves these questions open.
 
 Record independent integrations and deployments only with permission. Useful feedback includes time to the first accepted event, whether an operator could explain an alert from its evidence, and what prevented installation. Link reports to reproducible fixes.
+
+## Tool comparison and project scope
+
+| Reference | What it provides | Implication for API Sentinel |
+| --- | --- | --- |
+| [Akto inventory](https://docs.akto.io/api-inventory/concepts) | Traffic inventory concepts include shadow APIs, dependency graphs and sensitive-data classification. | Describe the current inventory as imported contracts. Compare declared and observed routes only after instrumented traffic has a tested normalization contract. |
+| [Prometheus instrumentation](https://prometheus.io/docs/practices/instrumentation/) | Request counts, errors, latency and queue health are standard operational signals. | Expose bounded service metrics and measure emitter latency separately. Keep project names, actor labels and raw paths out of metric labels. |
+
+## Security review scope
+
+The [OWASP API Security Top 10](https://owasp.org/API-Security/editions/2023/en/0x11-t10/) gives the review a common vocabulary. Object, property and function authorization apply to project records, investigation details and administrative actions. Authentication applies to sessions, key issuance and revocation. Resource consumption applies to import size, event batches, queue growth and retention. Sensitive business flows need explicit abuse cases for login and key issuance. Misconfiguration and inventory management apply to Compose exposure, service grants and contract drift. SSRF and unsafe consumption of APIs need new review when introducing external destinations or remote data sources. Recheck each applicable boundary on the named release candidate.
+
+## License decision
+
+Two permissive options fit reusable middleware and a self-hosted service. [MIT](https://choosealicense.com/licenses/mit/) has a short notice-preservation requirement. [Apache-2.0](https://choosealicense.com/licenses/apache-2.0/) includes an express contributor patent grant and additional notice and change-marking requirements. The owner selects a license separately.
