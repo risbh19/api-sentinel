@@ -1,6 +1,7 @@
 """Generate missing local Compose credentials, preserving existing secrets and settings."""
 
 import os
+import re
 import secrets
 from pathlib import Path
 
@@ -27,8 +28,12 @@ def main() -> None:
         if path.exists():
             current = path.read_text(encoding="utf-8")
             present = {
-                line.strip().removeprefix("export ").split("=", 1)[0]
-                for line in current.splitlines()
+                match.group(1)
+                for match in re.finditer(
+                    r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z_0-9]*)[ \t]*(?:[=:]|$)",
+                    current,
+                    re.MULTILINE,
+                )
             }
             missing = [key for key in generated if key not in present]
             if missing:

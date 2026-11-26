@@ -28,6 +28,29 @@ def test_existing_secrets_and_pseudonym_key_survive_reinitialization(tmp_path: P
     assert env.read_text(encoding="utf-8") == first
 
 
+def test_spaced_assignments_survive_a_configuration_upgrade(tmp_path: Path) -> None:
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    script = scripts / "init_env.py"
+    script.write_bytes((Path(__file__).resolve().parents[3] / "scripts/init_env.py").read_bytes())
+    env = tmp_path / ".env"
+    existing = (
+        "SENTINEL_EVENT_HMAC_KEY = previous-key\n"
+        "export  POSTGRES_PASSWORD = previous-db\n"
+        "SENTINEL_APP_PASSWORD: previous-app\n"
+    )
+    env.write_text(existing, encoding="utf-8")
+    subprocess.run([sys.executable, str(script)], check=True, capture_output=True)
+    updated = env.read_text(encoding="utf-8")
+    assert updated.startswith(existing)
+    assert updated.count("SENTINEL_EVENT_HMAC_KEY") == 1
+    assert updated.count("POSTGRES_PASSWORD") == 1
+    assert updated.count("SENTINEL_APP_PASSWORD") == 1
+    assert "SENTINEL_WORKER_PASSWORD=" in updated
+    subprocess.run([sys.executable, str(script)], check=True, capture_output=True)
+    assert env.read_text(encoding="utf-8") == updated
+
+
 def test_emitter_rejects_unsafe_credential_without_echoing_it() -> None:
     root = Path(__file__).resolve().parents[3]
     marker = "synthetic-credential-marker\nunsafe-header"
